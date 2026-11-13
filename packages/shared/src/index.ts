@@ -174,7 +174,18 @@ export interface CreateBuildInput { runIntegration: boolean; runAgentEval?: bool
 export interface CreateQaRunInput { runIntegration: boolean; runAgentEval?: boolean }
 
 // ---------- custom test cases ----------
-export type TestCaseKind = 'tool_call' | 'agent_task';
+export type TestCaseKind = 'tool_call' | 'tool_steps' | 'agent_task';
+/**
+ * One step of a tool_steps test case. String args may reference earlier results:
+ * "{{step1.id}}" (whole value, keeps type) or "Order {{step1.id}}" (interpolated). Paths: a.b.0.c
+ */
+export interface TestStep {
+  tool: string;
+  args: Record<string, unknown>;
+  expect: TestCaseExpect;
+  cleanup: boolean;   // runs at the end even if earlier steps failed (e.g. delete created data)
+}
+export interface TestStepResult { index: number; tool: string; cleanup: boolean; status: 'pass' | 'fail' | 'skipped'; args: unknown; result: string; detail: string }
 export interface TestCaseExpect {
   isError?: boolean;      // tool_call: expected isError (default false)
   category?: string;      // tool_call: expected error category, e.g. conflict, not_found, auth
@@ -191,6 +202,8 @@ export interface TestCaseDto {
   target: 'mock' | 'live';                               // mock = Factory mock API, live = QA connection
   mockResponse: { status: number; body?: unknown } | null; // tool_call + mock: simulated upstream response
   expect: TestCaseExpect;
+  // tool_steps
+  steps: TestStep[];
   // agent_task
   task: string | null;
   expectedTools: string[];

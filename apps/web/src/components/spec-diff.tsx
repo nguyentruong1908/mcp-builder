@@ -19,10 +19,10 @@ export function SpecDiffView({ projectId, from, to }: { projectId: string; from:
         return (
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-2">
-              {d.breaking ? <Badge tone="danger">Breaking</Badge> : <Badge tone="success">Không breaking</Badge>}
+              {d.breaking ? <Badge tone="danger">Breaking</Badge> : <Badge tone="success">Non-breaking</Badge>}
               <span className="text-xs text-muted-foreground">+{d.added.length} · ~{d.changed.length} · −{d.removed.length}</span>
             </div>
-            {lines.length === 0 ? <p className="text-sm text-muted-foreground">Hai snapshot không khác nhau về operation.</p> : (
+            {lines.length === 0 ? <p className="text-sm text-muted-foreground">The two snapshots have the same operations.</p> : (
               <div className="overflow-hidden rounded-lg border font-mono text-xs">
                 {lines.map((l, i) => (
                   <div key={i} className={cn('flex gap-3 border-b px-3 py-2 last:border-b-0', l.sign === '+' ? 'bg-success-soft/50' : l.sign === '-' ? 'bg-danger-soft/50' : 'bg-warning-soft/40')}>
@@ -42,7 +42,7 @@ export function SpecDiffView({ projectId, from, to }: { projectId: string; from:
             )}
             <div className="alert alert-warning">
               <Lightbulb className="mt-0.5 size-4 shrink-0 text-warning" />
-              <div>Đề xuất tăng <b>{d.suggestedBump}</b>. Đây chỉ là đề xuất; người dùng quyết định số version.</div>
+              <div>Suggested bump: <b>{d.suggestedBump}</b>. This is only a suggestion; you decide the version number.</div>
             </div>
           </div>
         );

@@ -55,10 +55,10 @@ export class BuildRunner {
     const controller = new AbortController();
     let abortReason = '';
     const abort = (why: string) => { if (!controller.signal.aborted) { abortReason = why; controller.abort(new BuildAbort(why)); } };
-    const timeout = setTimeout(() => abort(`Quá thời gian build (${limits.timeoutMin} phút)`), limits.timeoutMin * 60_000);
+    const timeout = setTimeout(() => abort(`Build timed out (${limits.timeoutMin} min)`), limits.timeoutMin * 60_000);
     const cancelPoll = setInterval(async () => {
       const b = await this.prisma.build.findUnique({ where: { id: this.buildId }, select: { cancelRequested: true } }).catch(() => null);
-      if (b?.cancelRequested) abort('Người dùng hủy job');
+      if (b?.cancelRequested) abort('Cancelled by user');
     }, 2000);
 
     const qaConn = build.project.connections.find((c) => c.useForQa) ?? null;
@@ -83,8 +83,9 @@ export class BuildRunner {
         ...parseSampleTasks(tasksRaw),
         ...cases.filter((c) => c.kind === 'agent_task' && c.task).map((c) => ({ text: c.task!, expected: c.expectedTools, answerContains: c.answerContains, label: c.name })),
       ],
-      toolCases: cases.filter((c) => c.kind === 'tool_call' && c.tool).map((c) => ({
-        name: c.name, tool: c.tool!, args: (c.args as Record<string, unknown>) ?? {}, target: c.target === 'live' ? 'live' : 'mock',
+      toolCases: cases.filter((c) => (c.kind === 'tool_call' && c.tool) || c.kind === 'tool_steps').map((c) => ({
+        ...(c.kind === 'tool_steps' ? { steps: c.steps as unknown as NonNullable<CustomToolCase['steps']> } : {}),
+        name: c.name, tool: c.tool ?? (c.steps as { tool: string; cleanup: boolean }[]).find((s) => !s.cleanup)?.tool ?? '', args: (c.args as Record<string, unknown>) ?? {}, target: c.target === 'live' ? 'live' : 'mock',
         mockResponse: (c.mockResponse as CustomToolCase['mockResponse']) ?? null, expect: (c.expect as CustomToolCase['expect']) ?? {},
       })),
       qaOnly: source ? { sourceLabel: buildLabel(source.seq), sourceWs: join(config.dataDir, 'builds', buildLabel(source.seq), 'workspace') } : null,
@@ -124,8 +125,8 @@ export class BuildRunner {
     const startedAt = Date.now();
     try {
       await ctx.log('info', 'job', ctx.qaOnly
-        ? `QA run ${label} · ${ctx.project.name} v${ctx.version.number} · trên code của ${ctx.qaOnly.sourceLabel} · ${ctx.tools.length} tool · ${ctx.toolCases.length} test case gọi tool · ${ctx.sampleTasks.length} tác vụ agent`
-        : `Build ${label} · ${ctx.project.name} v${ctx.version.number} · ${ctx.tools.length} tool · model ${generation!.model}${generation!.reasoningEffort ? ` (${generation!.reasoningEffort})` : ''} · profile workspace v${generation!.workspaceVersion}${generation!.projectVersion ? ` + project v${generation!.projectVersion}` : ''}${generation!.rules ? ' · có AGENTS.md' : ''}`);
+        ? `QA run ${label} · ${ctx.project.name} v${ctx.version.number} · on the code of ${ctx.qaOnly.sourceLabel} · ${ctx.tools.length} tools · ${ctx.toolCases.length} tool test cases · ${ctx.sampleTasks.length} agent tasks`
+        : `Build ${label} · ${ctx.project.name} v${ctx.version.number} · ${ctx.tools.length} tools · model ${generation!.model}${generation!.reasoningEffort ? ` (${generation!.reasoningEffort})` : ''} · profile workspace v${generation!.workspaceVersion}${generation!.projectVersion ? ` + project v${generation!.projectVersion}` : ''}${generation!.rules ? ' · with AGENTS.md' : ''}`);
       await this.stageSpec(ctx, build.version.specSnapshotId);
       const thread = ctx.qaOnly ? await this.skipCodex(ctx) : await this.stageCodex(ctx);
       await this.stageBuild(ctx, thread);
@@ -133,10 +134,10 @@ export class BuildRunner {
       if (thread) qa = await this.repairFromQa(ctx, thread, qa);
       await this.stagePackage(ctx, qa, thread);
       const ok = qa.packageVerified;
-      await this.finish(ok ? 'succeeded' : 'failed', ok ? null : `QA chưa đạt: ${qa.failures} kiểm thử bắt buộc thất bại. Bản nháp, không gắn nhãn Ready.`);
+      await this.finish(ok ? 'succeeded' : 'failed', ok ? null : `QA not passed: ${qa.failures} required checks failed. Kept as a draft, not marked Ready.`);
       await ctx.log(ok ? 'success' : 'error', 'job', `Package verified: ${ok ? 'YES' : 'NO'} · Integration verified: ${qa.integration.toUpperCase()} · ${Math.round((Date.now() - startedAt) / 1000)}s · $${this.cost.toFixed(2)}`);
     } catch (err) {
-      const cancelled = abortReason === 'Người dùng hủy job';
+      const cancelled = abortReason === 'Cancelled by user';
       const message = abortReason || (err as Error).message;
       if (this.current && this.stages[this.current] === 'running') await ctx.setStage(this.current, 'failed').catch(() => undefined);
       await ctx.log('error', this.current ?? 'job', message).catch(() => undefined);
@@ -161,14 +162,14 @@ export class BuildRunner {
   private async stageSpec(ctx: BuildCtx, specSnapshotId: string | null) {
     await ctx.setStage('spec', 'running');
     const needsCodex = !ctx.qaOnly || (ctx.runAgentEval && ctx.sampleTasks.length > 0);
-    if (needsCodex && !codexAuthConfigured()) throw new Error('Codex chưa được đăng nhập. Vào Settings › Codex để đăng nhập, nhập API key hoặc upload auth.json.');
+    if (needsCodex && !codexAuthConfigured()) throw new Error('Codex is not signed in. Go to Settings › Codex to sign in, add an API key, or upload auth.json.');
     const sandboxError = needsCodex && !ctx.qaOnly ? await codexSandboxError() : null;
-    if (sandboxError) throw new Error(`Sandbox của Codex không chạy được: ${sandboxError}`);
-    if (!specSnapshotId) throw new Error('Version chưa có Swagger snapshot');
+    if (sandboxError) throw new Error(`The Codex sandbox cannot start: ${sandboxError}`);
+    if (!specSnapshotId) throw new Error('The version has no spec snapshot');
     const snap = await this.prisma.specSnapshot.findUniqueOrThrow({ where: { id: specSnapshotId } });
     const errors = (snap.issues as { level: string; message: string }[]).filter((i) => i.level === 'error');
-    if (errors.length) throw new Error(`Spec có lỗi: ${errors.map((e) => e.message).join('; ')}`);
-    if (!ctx.tools.length) throw new Error('Chưa chọn tool nào trong Tool designer');
+    if (errors.length) throw new Error(`The spec has errors: ${errors.map((e) => e.message).join('; ')}`);
+    if (!ctx.tools.length) throw new Error('No tools selected in the Tool designer');
     ctx.specRaw = snap.raw;
     ctx.specSha = snap.sha256;
     await ctx.log('info', 'spec', `OAS ${snap.oasVersion} · snapshot ${snap.sha256.slice(0, 12)} · tools: ${ctx.tools.map((t) => t.name).join(', ')}`);
@@ -177,19 +178,19 @@ export class BuildRunner {
       await rm(ctx.dir, { recursive: true, force: true });
       await mkdir(ctx.outDir, { recursive: true });
       await cp(ctx.qaOnly.sourceWs, ctx.ws, { recursive: true, filter: (p) => !p.includes(`${sep}node_modules`) });
-      await ctx.log('info', 'spec', `Workspace sao chép từ ${ctx.qaOnly.sourceLabel}; cài dependency…`);
+      await ctx.log('info', 'spec', `Workspace copied from ${ctx.qaOnly.sourceLabel}; installing dependencies…`);
     } else {
       await prepareWorkspace(ctx);
-      await ctx.log('info', 'spec', 'Workspace tạo từ template mcp-node; cài dependency…');
+      await ctx.log('info', 'spec', 'Workspace created from the mcp-node template; installing dependencies…');
     }
     const inst = await run('npm', ['install', '--no-audit', '--no-fund', '--loglevel=error'], { cwd: ctx.ws, signal: ctx.signal, timeoutMs: 300_000 });
     this.check(ctx);
-    if (inst.code !== 0) throw new Error(`npm install thất bại: ${tail(inst.stderr, 800)}`);
+    if (inst.code !== 0) throw new Error(`npm install failed: ${tail(inst.stderr, 800)}`);
     await ctx.setStage('spec', 'ok');
   }
 
   private async skipCodex(ctx: BuildCtx): Promise<null> {
-    await ctx.log('info', 'codex', `Bỏ qua sinh code: dùng lại adapter của ${ctx.qaOnly!.sourceLabel}`);
+    await ctx.log('info', 'codex', `Skipping code generation: reusing the adapters of ${ctx.qaOnly!.sourceLabel}`);
     await ctx.setStage('codex', 'skipped');
     return null;
   }
@@ -198,13 +199,13 @@ export class BuildRunner {
     await ctx.setStage('codex', 'running');
     const protectedFiles = await snapshotProtected(ctx.ws);
     const thread = startThread(ctx);
-    await ctx.log('info', 'codex', `Codex thread bắt đầu (sandbox ${codexSandbox}, không network, model ${config.codexModel})`);
+    await ctx.log('info', 'codex', `Codex thread started (sandbox ${codexSandbox}, ${codexSandbox === 'workspace-write' ? 'no network' : 'container network'}, plugins off, model ${ctx.generation?.model ?? config.codexModel})`);
     await runTurn(ctx, thread, generationPrompt(ctx));
     if (thread.id) await this.prisma.build.update({ where: { id: this.buildId }, data: { codexThreadId: thread.id } });
     const reverted = await enforceProtected(ctx.ws, protectedFiles);
-    if (reverted.length) await ctx.log('warn', 'codex', `Đã khôi phục file ngoài phạm vi Codex được sửa: ${reverted.join(', ')}`);
+    if (reverted.length) await ctx.log('warn', 'codex', `Restored files Codex may not modify: ${reverted.join(', ')}`);
     const adapters = (await walk(ctx.ws)).filter((f) => f.startsWith('src/adapters/') && f.endsWith('.ts'));
-    await ctx.log('success', 'codex', `Codex tạo ${adapters.length} adapter cho ${ctx.tools.length} tool`);
+    await ctx.log('success', 'codex', `Codex wrote ${adapters.length} adapters for ${ctx.tools.length} tools`);
     await ctx.setStage('codex', 'ok');
     return thread;
   }
@@ -214,16 +215,16 @@ export class BuildRunner {
     for (let round = 0; ; round++) {
       this.check(ctx);
       const r = await run('npm', ['run', 'build', '--silent'], { cwd: ctx.ws, signal: ctx.signal, timeoutMs: 180_000 });
-      if (r.code === 0) { ctx.checks.tsc = true; ctx.checks.tscDetail = round ? `Pass sau ${round} vòng tự sửa` : 'Pass'; break; }
+      if (r.code === 0) { ctx.checks.tsc = true; ctx.checks.tscDetail = round ? `Passed after ${round} repair rounds` : 'Pass'; break; }
       const out = tail(r.stdout + r.stderr, 6000);
-      await ctx.log('warn', 'build', `tsc lỗi:\n${tail(out, 1500)}`);
-      if (!thread || round >= ctx.limits.maxRepairRounds) { ctx.checks.tsc = false; throw new Error(`Build lỗi sau ${round} vòng tự sửa (giới hạn ${ctx.limits.maxRepairRounds})`); }
+      await ctx.log('warn', 'build', `tsc errors:\n${tail(out, 1500)}`);
+      if (!thread || round >= ctx.limits.maxRepairRounds) { ctx.checks.tsc = false; throw new Error(`Build still failing after ${round} repair rounds (limit ${ctx.limits.maxRepairRounds})`); }
       await this.prisma.build.update({ where: { id: this.buildId }, data: { repairRounds: round + 1 } });
-      await ctx.log('info', 'build', `Vòng tự sửa ${round + 1}/${ctx.limits.maxRepairRounds}`);
+      await ctx.log('info', 'build', `Repair round ${round + 1}/${ctx.limits.maxRepairRounds}`);
       const snap = await snapshotProtected(ctx.ws);
       await runTurn(ctx, thread, repairPrompt(out));
       const reverted = await enforceProtected(ctx.ws, snap);
-      if (reverted.length) await ctx.log('warn', 'build', `Đã khôi phục: ${reverted.join(', ')}`);
+      if (reverted.length) await ctx.log('warn', 'build', `Restored: ${reverted.join(', ')}`);
     }
     await ctx.log('success', 'build', `TypeScript build ${ctx.checks.tscDetail}`);
 
@@ -231,13 +232,13 @@ export class BuildRunner {
     for (const rel of await walk(ctx.ws)) {
       if (rel === 'package-lock.json') continue;
       const text = await readFile(join(ctx.ws, rel), 'utf8').catch(() => '');
-      for (const s of ctx.knownSecrets) if (s.length >= 6 && text.includes(s)) findings.push(`${rel}: chứa secret của môi trường`);
+      for (const s of ctx.knownSecrets) if (s.length >= 6 && text.includes(s)) findings.push(`${rel}: contains an environment secret`);
       for (const [name, re] of GENERIC_SECRETS) if (re.test(text)) findings.push(`${rel}: ${name}`);
     }
     ctx.checks.secretScan = findings.length === 0;
-    ctx.checks.secretDetail = findings.length ? findings.join('; ') : '0 phát hiện';
-    if (findings.length) throw new Error(`Secret scan phát hiện: ${findings.join('; ')}`);
-    await ctx.log('success', 'build', 'Secret scan: 0 phát hiện');
+    ctx.checks.secretDetail = findings.length ? findings.join('; ') : '0 findings';
+    if (findings.length) throw new Error(`Secret scan found: ${findings.join('; ')}`);
+    await ctx.log('success', 'build', 'Secret scan: 0 findings');
     await ctx.setStage('build', 'ok');
   }
 
@@ -251,19 +252,19 @@ export class BuildRunner {
       if (!fixable.length) break;
       this.check(ctx);
       await this.prisma.build.update({ where: { id: this.buildId }, data: { qaRepairRounds: round } });
-      await ctx.log('warn', 'qa', `Vòng tự sửa theo QA ${round}/${max}: gửi ${fixable.length} lỗi cho Codex`);
+      await ctx.log('warn', 'qa', `QA repair round ${round}/${max}: sending ${fixable.length} failures to Codex`);
       await ctx.setStage('codex', 'running');
       const snap = await snapshotProtected(ctx.ws);
       await runTurn(ctx, thread, qaRepairPrompt(fixable));
       const reverted = await enforceProtected(ctx.ws, snap);
-      if (reverted.length) await ctx.log('warn', 'codex', `Đã khôi phục: ${reverted.join(', ')}`);
+      if (reverted.length) await ctx.log('warn', 'codex', `Restored: ${reverted.join(', ')}`);
       await ctx.setStage('codex', 'ok');
       await this.stageBuild(ctx, thread);
       const before = fixable.length;
       qa = await this.stageQa(ctx);
       const after = this.lastQaRows.filter(isQaFixable).length;
-      await ctx.log(after < before ? 'success' : 'warn', 'qa', `Sau vòng ${round}: lỗi sửa được bằng code ${before} → ${after}`);
-      if (after >= before) { await ctx.log('warn', 'qa', 'Dừng tự sửa theo QA: vòng vừa rồi không giảm được lỗi'); break; }
+      await ctx.log(after < before ? 'success' : 'warn', 'qa', `After round ${round}: code-fixable failures ${before} → ${after}`);
+      if (after >= before) { await ctx.log('warn', 'qa', 'Stopping QA repair: the last round did not reduce failures'); break; }
     }
     return qa;
   }

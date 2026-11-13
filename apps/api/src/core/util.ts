@@ -5,6 +5,7 @@ import type { z } from 'zod';
 export const sha256 = (data: string | Buffer) => createHash('sha256').update(data).digest('hex');
 
 export function slugify(s: string): string {
+  // Strip diacritics (incl. Vietnamese d-stroke) so non-English names still get readable slugs.
   const base = s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/gi, 'd').toLowerCase()
     .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48);
   return base || 'project';

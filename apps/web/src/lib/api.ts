@@ -21,7 +21,7 @@ async function req<R>(path: string, init: Init = {}): Promise<R> {
       body: json !== undefined ? JSON.stringify(json) : undefined,
     });
   } catch {
-    throw new NetworkError(`Không kết nối được API tại ${API_URL}`);
+    throw new NetworkError(`Cannot reach the API at ${API_URL}`);
   }
   const text = await res.text();
   let body: unknown = undefined;

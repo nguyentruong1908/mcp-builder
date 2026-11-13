@@ -6,7 +6,7 @@ import { diffOperations, processSpec, SpecError, toToolName } from '../dist/spec
 import { sampleArgs } from '../dist/builds/pipeline/samples.js';
 import { redact } from '../dist/core/util.js';
 
-const raw = readFileSync(new URL('../../../examples/sample-erp/openapi.yaml', import.meta.url), 'utf8');
+const raw = readFileSync(new URL('./fixtures/erp.openapi.yaml', import.meta.url), 'utf8');
 
 test('normalizes the sample ERP spec', async () => {
   const s = await processSpec(raw);
@@ -14,7 +14,7 @@ test('normalizes the sample ERP spec', async () => {
   assert.equal(s.operations.length, 12);
   const byKey = Object.fromEntries(s.operations.map((o) => [`${o.method} ${o.path}`, o]));
   assert.match(byKey['POST /invoices/{id}/attachments'].unsupportedReason, /multipart/);
-  assert.match(byKey['GET /reports/export'].unsupportedReason, /nhị phân|streaming/i);
+  assert.match(byKey['GET /reports/export'].unsupportedReason, /binary|streaming/i);
   const create = byKey['POST /sales-orders'];
   assert.equal(create.toolName, 'create_sales_order');
   assert.deepEqual(create.params.map((p) => `${p.in}:${p.name}:${p.required}`), ['body:customerCode:true', 'body:lines:true']);
@@ -26,7 +26,7 @@ test('normalizes the sample ERP spec', async () => {
 
 test('rejects Swagger 2.0 and external refs', async () => {
   await assert.rejects(processSpec('swagger: "2.0"\ninfo: {title: x, version: "1"}\npaths: {}'), SpecError);
-  await assert.rejects(processSpec(JSON.stringify({ openapi: '3.0.3', info: { title: 'x', version: '1' }, paths: { '/a': { get: { responses: { 200: { $ref: 'http://evil/x.yaml' } } } } } })), /bị chặn/);
+  await assert.rejects(processSpec(JSON.stringify({ openapi: '3.0.3', info: { title: 'x', version: '1' }, paths: { '/a': { get: { responses: { 200: { $ref: 'http://evil/x.yaml' } } } } } })), /blocked/);
 });
 
 test('flags unsupported auth (oauth2)', async () => {
@@ -40,7 +40,7 @@ test('diff detects removed endpoints and new required params as breaking', async
   const b = await processSpec(raw.replace(/  \/products:\n[\s\S]*?(?=  \/products\/\{sku\}\/stock:)/, '').replace('- { name: warehouse, in: query, schema: { type: string }, description: warehouseCode e.g. HN01 }', '- { name: warehouse, in: query, required: true, schema: { type: string } }'));
   const d = diffOperations(a.operations, b.operations, 'a', 'b', new Map([['GET /products', 'search_products']]));
   assert.deepEqual(d.removed, [{ method: 'GET', path: '/products' }]);
-  assert.ok(d.changed.some((c) => c.path === '/products/{sku}/stock' && c.changes.some((x) => x.includes('bắt buộc'))));
+  assert.ok(d.changed.some((c) => c.path === '/products/{sku}/stock' && c.changes.some((x) => x.includes('required'))));
   assert.equal(d.breaking, true);
   assert.equal(d.suggestedBump, 'major');
   assert.deepEqual(d.affectedTools.map((t) => t.name), ['search_products']);
@@ -55,17 +55,17 @@ test('helpers', () => {
 
 test('parses sample tasks with optional expected tools', async () => {
   const { parseSampleTasks } = await import('../dist/builds/pipeline/agent-eval.js');
-  assert.deepEqual(parseSampleTasks('- Tra các đơn Draft của khách C0042 => search_sales_orders\n\n2. Tồn kho SKU-1002 → get_product_stock, search_products\n* Chào hỏi'), [
-    { text: 'Tra các đơn Draft của khách C0042', expected: ['search_sales_orders'] },
-    { text: 'Tồn kho SKU-1002', expected: ['get_product_stock', 'search_products'] },
-    { text: 'Chào hỏi', expected: [] },
+  assert.deepEqual(parseSampleTasks('- List Draft orders of customer C0042 => search_sales_orders\n\n2. Stock of SKU-1002 → get_product_stock, search_products\n* Say hello'), [
+    { text: 'List Draft orders of customer C0042', expected: ['search_sales_orders'] },
+    { text: 'Stock of SKU-1002', expected: ['get_product_stock', 'search_products'] },
+    { text: 'Say hello', expected: [] },
   ]);
 });
 
 test('generation profile: project overrides model/reasoning, rules are additive', async () => {
   const { effectiveOf } = await import('../dist/generation/generation.module.js');
-  const ws = { model: 'gpt-6-sol', reasoningEffort: 'medium', rules: 'Thông báo lỗi bằng tiếng Việt.', version: 3, updatedAt: null };
-  const pj = { model: null, reasoningEffort: 'high', rules: 'Giữ nguyên nextCursor.', version: 1, updatedAt: null };
+  const ws = { model: 'gpt-6-sol', reasoningEffort: 'medium', rules: 'Write error messages in plain English.', version: 3, updatedAt: null };
+  const pj = { model: null, reasoningEffort: 'high', rules: 'Keep nextCursor.', version: 1, updatedAt: null };
   const e = effectiveOf(ws, pj);
   assert.equal(e.model, 'gpt-6-sol');
   assert.equal(e.reasoningEffort, 'high');
@@ -78,7 +78,7 @@ test('generation profile: project overrides model/reasoning, rules are additive'
 
 test('QA repair prompt lists failures and forbids gaming the tests', async () => {
   const { qaRepairPrompt } = await import('../dist/builds/pipeline/codex.js');
-  const p = qaRepairPrompt([{ layer: 'custom', tool: 'get_customer', name: 'C9999 → not_found', detail: 'Loại lỗi [server] ≠ [not_found]', evidence: { args: { code: 'C9999' } } }]);
+  const p = qaRepairPrompt([{ layer: 'custom', tool: 'get_customer', name: 'C9999 → not_found', detail: 'Error category [server] ≠ [not_found]', evidence: { args: { code: 'C9999' } } }]);
   assert.match(p, /\[custom\] get_customer · C9999 → not_found/);
   assert.match(p, /Do not special-case test inputs/);
   assert.match(p, /only edit src\/adapters\//);
@@ -87,11 +87,22 @@ test('QA repair prompt lists failures and forbids gaming the tests', async () =>
 test('QA repair only targets adapter-fixable failures', async () => {
   const { isQaFixable } = await import('../dist/builds/pipeline/codex.js');
   const f = (layer, tool, detail, status = 'fail') => isQaFixable({ layer, tool, detail, status });
-  assert.equal(f('custom', 'get_customer', 'Kết quả không chứa "x"'), true);
-  assert.equal(f('error', 'get_customer', 'Kỳ vọng isError'), true);
-  assert.equal(f('install', null, 'npm pack lỗi'), false);
-  assert.equal(f('agent', null, 'Tool lỗi: approve_sales_order [mcp]'), false);
-  assert.equal(f('agent', 'approve_sales_order', 'Được agent dùng'), false);
-  assert.equal(f('agent', null, 'Không gọi tool mong đợi: get_customer'), true);
+  assert.equal(f('custom', 'get_customer', 'Result does not contain "x"'), true);
+  assert.equal(f('error', 'get_customer', 'Expected isError'), true);
+  assert.equal(f('install', null, 'npm pack failed'), false);
+  assert.equal(f('agent', null, 'Tool errors: approve_sales_order [mcp]'), false);
+  assert.equal(f('agent', 'approve_sales_order', 'Used by the agent'), false);
+  assert.equal(f('agent', null, 'Expected tools not called: get_customer'), true);
   assert.equal(f('custom', 'x', 'y', 'blocked'), false);
 });
+
+test('step placeholders resolve from earlier results and keep types', async () => {
+  const { resolveArgs, PlaceholderError } = await import('../dist/builds/pipeline/steps.js');
+  const results = [{ id: 'SO-1003', total: 150000, items: [{ code: 'C1' }] }, undefined];
+  assert.deepEqual(resolveArgs({ id: '{{step1.id}}', n: '{{step1.total}}', note: 'Order {{ step1.id }} / {{step1.items.0.code}}', list: ['{{step1.id}}'] }, results),
+    { id: 'SO-1003', n: 150000, note: 'Order SO-1003 / C1', list: ['SO-1003'] });
+  assert.throws(() => resolveArgs({ id: '{{step2.id}}' }, results), PlaceholderError);
+  assert.throws(() => resolveArgs({ id: '{{step1.missing}}' }, results), /no "missing"/);
+  assert.deepEqual(resolveArgs({ plain: 'no placeholders', x: 1 }, results), { plain: 'no placeholders', x: 1 });
+});
+

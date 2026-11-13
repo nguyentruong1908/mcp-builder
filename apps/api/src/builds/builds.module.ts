@@ -33,19 +33,19 @@ export class BuildsService {
   async create(projectId: string, body: unknown, actor = 'system'): Promise<BuildSummary> {
     const input = parse(z.object({ runIntegration: z.boolean().default(true), runAgentEval: z.boolean().default(true) }).strict(), body ?? {});
     const project = await this.prisma.project.findUnique({ where: { id: projectId }, include: { context: true } });
-    if (!project) throw new NotFoundException('Project không tồn tại');
-    if (project.archivedAt) throw new BadRequestException('Project đã archive');
-    if (await this.prisma.build.count({ where: { projectId, status: { in: ['queued', 'running'] } } })) throw new ConflictException('Project đang có build chạy');
+    if (!project) throw new NotFoundException('Project not found');
+    if (project.archivedAt) throw new BadRequestException('Project is archived');
+    if (await this.prisma.build.count({ where: { projectId, status: { in: ['queued', 'running'] } } })) throw new ConflictException('A build is already running for this project');
 
     const s = await this.settings.get();
     const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
     const spent = (await this.prisma.build.aggregate({ where: { createdAt: { gte: monthStart } }, _sum: { costUsd: true } }))._sum.costUsd ?? 0;
-    if (spent >= s.monthlyBudgetUsd) throw new ConflictException(`Đã dùng hết ngân sách tháng ($${spent.toFixed(2)} / $${s.monthlyBudgetUsd})`);
+    if (spent >= s.monthlyBudgetUsd) throw new ConflictException(`Monthly budget exhausted ($${spent.toFixed(2)} / $${s.monthlyBudgetUsd})`);
 
     const spec = await this.prisma.specSnapshot.findFirst({ where: { projectId }, orderBy: { createdAt: 'desc' } });
-    if (!spec) throw new BadRequestException('Chưa nhập Swagger');
+    if (!spec) throw new BadRequestException('No OpenAPI spec imported yet');
     const tools = await this.prisma.toolDefinition.findMany({ where: { projectId, selected: true, present: true, unsupportedReason: null }, orderBy: { name: 'asc' } });
-    if (!tools.length) throw new BadRequestException('Chưa chọn tool nào');
+    if (!tools.length) throw new BadRequestException('No tools selected');
     const toolsSnapshot: ToolSnapshot[] = tools.map((t) => ({
       name: t.name, description: t.description, method: t.method, path: t.path, tag: t.tag, impact: t.impact, requireConfirm: t.requireConfirm,
       params: t.params as unknown as ToolSnapshot['params'], inputSchema: t.inputSchema as Record<string, unknown>, bodyWhole: t.bodyWhole, responseSchema: t.responseSchema ?? null,
@@ -75,11 +75,11 @@ export class BuildsService {
   async createQaRun(sourceId: string, body: unknown, actor = 'system'): Promise<BuildSummary> {
     const input = parse(z.object({ runIntegration: z.boolean().default(true), runAgentEval: z.boolean().default(true) }).strict(), body ?? {});
     const src = await this.prisma.build.findUnique({ where: { id: sourceId }, include: { version: true, project: true } });
-    if (!src) throw new NotFoundException('Build không tồn tại');
-    if (src.status === 'queued' || src.status === 'running') throw new ConflictException('Build nguồn chưa chạy xong');
-    if (await this.prisma.build.count({ where: { projectId: src.projectId, status: { in: ['queued', 'running'] } } })) throw new ConflictException('Project đang có build chạy');
+    if (!src) throw new NotFoundException('Build not found');
+    if (src.status === 'queued' || src.status === 'running') throw new ConflictException('The source build has not finished');
+    if (await this.prisma.build.count({ where: { projectId: src.projectId, status: { in: ['queued', 'running'] } } })) throw new ConflictException('A build is already running for this project');
     const ws = join(config.dataDir, 'builds', buildLabel(src.seq), 'workspace');
-    if (!existsSync(join(ws, 'dist/mcp.js')) || !existsSync(join(ws, 'factory/tools.json'))) throw new BadRequestException(`Build ${buildLabel(src.seq)} không còn code đã build (cần qua được bước Build & static)`);
+    if (!existsSync(join(ws, 'dist/mcp.js')) || !existsSync(join(ws, 'factory/tools.json'))) throw new BadRequestException(`Build ${buildLabel(src.seq)} has no compiled code (it must have passed the Build & static stage)`);
 
     // The code was generated from factory/tools.json; QA must use exactly those definitions.
     const built = JSON.parse(readFileSync(join(ws, 'factory/tools.json'), 'utf8')) as { tools: { name: string }[] };
@@ -100,13 +100,13 @@ export class BuildsService {
       },
       include: buildInclude,
     });
-    await this.audit.log('build.qa_run', `${src.project.name} · QA trên code ${run.sourceBuildLabel} → ${buildLabel(run.seq)}`, { projectId: src.projectId, buildId: run.id });
+    await this.audit.log('build.qa_run', `${src.project.name} · QA on the code of ${run.sourceBuildLabel} → ${buildLabel(run.seq)}`, { projectId: src.projectId, buildId: run.id });
     return toBuildSummary(run);
   }
 
   async detail(id: string): Promise<BuildDetail> {
     const b = await this.prisma.build.findUnique({ where: { id }, include: { ...buildInclude, artifacts: { orderBy: { createdAt: 'asc' } } } });
-    if (!b) throw new NotFoundException('Build không tồn tại');
+    if (!b) throw new NotFoundException('Build not found');
     return { ...toBuildSummary(b), provenance: b.provenance as Record<string, string>, artifacts: b.artifacts.map(toArtifactDto), limits: b.limits as BuildDetail['limits'], generation: (b.generation as BuildDetail['generation']) ?? null };
   }
 
@@ -118,7 +118,7 @@ export class BuildsService {
   async qa(id: string): Promise<QaReport> {
     const b = await this.prisma.build.findUnique({ where: { id }, include: { ...buildInclude, qaResults: true, version: { select: { number: true, toolsSnapshot: true } } } });
     const snapshot = (b?.toolsSnapshot ?? b?.version.toolsSnapshot) as unknown as ToolSnapshot[] | null;
-    if (!b) throw new NotFoundException('Build không tồn tại');
+    if (!b) throw new NotFoundException('Build not found');
     const results = b.qaResults.map((r) => ({ id: r.id, layer: r.layer as QaLayer, tool: r.tool, name: r.name, status: r.status, detail: r.detail, evidence: r.evidence ?? undefined }));
     const layers = LAYERS.map((layer) => {
       const rs = results.filter((r) => r.layer === layer);
@@ -149,10 +149,10 @@ export class BuildsService {
 
   async release(id: string): Promise<VersionDto> {
     const v = await this.prisma.version.findUnique({ where: { id }, include: { builds: { orderBy: { createdAt: 'desc' }, take: 1 } } });
-    if (!v) throw new NotFoundException('Version không tồn tại');
-    if (v.status !== 'draft') throw new BadRequestException('Chỉ release được version nháp');
+    if (!v) throw new NotFoundException('Version not found');
+    if (v.status !== 'draft') throw new BadRequestException('Only draft versions can be released');
     const b = v.builds[0];
-    if (!b || b.status !== 'succeeded' || !b.packageVerified) throw new BadRequestException('Build mới nhất của version chưa đạt Package verified');
+    if (!b || b.status !== 'succeeded' || !b.packageVerified) throw new BadRequestException('The latest build of this version is not Package verified');
     await this.prisma.version.update({ where: { id }, data: { status: 'released', releasedAt: new Date() } });
     await this.audit.log('version.release', `v${v.number}`, { projectId: v.projectId, versionId: id, buildId: b.id, integrationVerified: b.integrationVerified });
     return (await this.versions(v.projectId)).find((x) => x.id === id)!;
@@ -160,8 +160,8 @@ export class BuildsService {
 
   async deprecate(id: string): Promise<VersionDto> {
     const v = await this.prisma.version.findUnique({ where: { id } });
-    if (!v) throw new NotFoundException('Version không tồn tại');
-    if (v.status !== 'released') throw new BadRequestException('Chỉ deprecate được version đã release');
+    if (!v) throw new NotFoundException('Version not found');
+    if (v.status !== 'released') throw new BadRequestException('Only released versions can be deprecated');
     await this.prisma.version.update({ where: { id }, data: { status: 'deprecated', deprecatedAt: new Date() } });
     await this.audit.log('version.deprecate', `v${v.number}`, { projectId: v.projectId, versionId: id });
     return (await this.versions(v.projectId)).find((x) => x.id === id)!;
@@ -179,7 +179,7 @@ export class BuildWorker implements OnApplicationBootstrap, OnApplicationShutdow
 
   async onApplicationBootstrap() {
     // A build cannot survive an API restart: its subprocesses are gone.
-    const orphans = await this.prisma.build.updateMany({ where: { status: 'running' }, data: { status: 'failed', error: 'API khởi động lại trong khi build đang chạy', finishedAt: new Date() } });
+    const orphans = await this.prisma.build.updateMany({ where: { status: 'running' }, data: { status: 'failed', error: 'The API restarted while the build was running', finishedAt: new Date() } });
     if (orphans.count) this.logger.warn(`Marked ${orphans.count} orphaned build(s) as failed`);
     this.timer = setInterval(() => void this.tick(), config.workerPollMs);
   }
@@ -225,10 +225,10 @@ export class BuildsController {
   @Post('builds/:id/cancel')
   async cancel(@Param('id') id: string) {
     const b = await this.prisma.build.findUnique({ where: { id } });
-    if (!b) throw new NotFoundException('Build không tồn tại');
-    if (b.status === 'queued') await this.prisma.build.update({ where: { id }, data: { status: 'cancelled', cancelRequested: true, finishedAt: new Date(), error: 'Người dùng hủy job' } });
+    if (!b) throw new NotFoundException('Build not found');
+    if (b.status === 'queued') await this.prisma.build.update({ where: { id }, data: { status: 'cancelled', cancelRequested: true, finishedAt: new Date(), error: 'Cancelled by user' } });
     else if (b.status === 'running') await this.prisma.build.update({ where: { id }, data: { cancelRequested: true } });
-    else throw new BadRequestException('Build đã kết thúc');
+    else throw new BadRequestException('Build has already finished');
     await this.audit.log('build.cancel', id, { projectId: b.projectId, buildId: id });
     return this.svc.detail(id);
   }
@@ -244,7 +244,7 @@ export class BuildsController {
       });
       void (async () => {
         const b = await this.prisma.build.findUnique({ where: { id }, include: buildInclude });
-        if (!b) { sub.error(new NotFoundException('Build không tồn tại')); return; }
+        if (!b) { sub.error(new NotFoundException('Build not found')); return; }
         sub.next({ data: { type: 'build', build: toBuildSummary(b) } });
         for (const log of await this.svc.logs(id)) { if (log.id > lastId) { lastId = log.id; sub.next({ data: { type: 'log', log } }); } }
       })();
@@ -260,7 +260,7 @@ export class BuildsController {
   @Get('artifacts/:id/download')
   async download(@Param('id') id: string, @Res() res: Response) {
     const a = await this.prisma.artifact.findUnique({ where: { id } });
-    if (!a || !existsSync(a.path) || !a.path.startsWith(config.dataDir)) throw new NotFoundException('Artifact không tồn tại');
+    if (!a || !existsSync(a.path) || !a.path.startsWith(config.dataDir)) throw new NotFoundException('Artifact not found');
     res.download(a.path, a.filename);
   }
 }

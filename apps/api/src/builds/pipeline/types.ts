@@ -61,4 +61,5 @@ export interface CustomToolCase {
   target: 'mock' | 'live';
   mockResponse: { status: number; body?: unknown } | null;
   expect: { isError?: boolean; category?: string; contains?: string[] };
+  steps?: { tool: string; args: Record<string, unknown>; expect: { isError?: boolean; category?: string; contains?: string[] }; cleanup: boolean }[];
 }

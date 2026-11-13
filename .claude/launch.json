@@ -1,8 +1,25 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "api", "runtimeExecutable": "pnpm", "runtimeArgs": ["--filter", "api", "start"], "port": 4000 },
-    { "name": "web", "runtimeExecutable": "pnpm", "runtimeArgs": ["--filter", "web", "dev"], "port": 3000 },
-    { "name": "sample-erp", "runtimeExecutable": "node", "runtimeArgs": ["examples/sample-erp/server.mjs"], "port": 4010 }
+    {
+      "name": "api",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "api",
+        "start"
+      ],
+      "port": 4000
+    },
+    {
+      "name": "web",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "web",
+        "dev"
+      ],
+      "port": 3000
+    }
   ]
 }

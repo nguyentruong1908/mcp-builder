@@ -40,7 +40,7 @@ export function ExportDialog({ projectId, open, onClose }: { projectId: string; 
     setBusy(true); setErr(null);
     try {
       const build = await api.createBuild(projectId, { runIntegration, runAgentEval });
-      toast(`Đã xếp hàng ${build.label}`);
+      toast(`Queued ${build.label}`);
       onClose();
       router.push(`/projects/${projectId}/builds/${build.id}`);
     } catch (e) {
@@ -55,47 +55,47 @@ export function ExportDialog({ projectId, open, onClose }: { projectId: string; 
       open={open}
       onClose={onClose}
       title={d ? `Export ${d.project.name}` : 'Export'}
-      description="Chạy generation, build, kiểm thử và đóng gói dưới dạng job nền."
+      description="Runs generation, build, testing and packaging as a background job."
       footer={<>
-        <button className="btn btn-ghost" onClick={onClose}>Hủy</button>
+        <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
         <button className="btn btn-primary" disabled={!canStart} onClick={start}>
-          {busy ? <Spinner /> : <Play className="size-4" />} Bắt đầu Export
+          {busy ? <Spinner /> : <Play className="size-4" />} Start export
         </button>
       </>}
     >
       {!d ? (q.error ? <ErrorState error={q.error} onRetry={q.refetch} /> : <LoadingBlock />) : (
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <SummaryBox label="Phạm vi" value={`${selected.length} tool`} sub={`${d.tools.length} operation trong spec`} />
-            <SummaryBox label="Đầu ra" value={outputs || 'Chưa chọn'} sub="Node.js · npm" />
-            <SummaryBox label="Môi trường QA" value={qaConn ? <span className="mono">{qaConn.name}</span> : 'Chưa cấu hình'} sub={qaConn ? `${qaConn.authType} · ${qaConn.secretResolvable ? 'secret sẵn sàng' : 'thiếu secret'}` : 'Integration sẽ NOT RUN'} />
-            <SummaryBox label="Giới hạn" value={`$${d.settings.maxCostUsdPerBuild} · ${d.settings.maxRepairRounds} vòng sửa`} sub={`timeout ${d.settings.buildTimeoutMin} phút · ${d.generation ? `${d.generation.effective.model} · reasoning ${d.generation.effective.reasoningEffort ?? 'mặc định'}` : d.settings.codexModel}`} />
+            <SummaryBox label="Scope" value={`${selected.length} tools`} sub={`${d.tools.length} operations in the spec`} />
+            <SummaryBox label="Outputs" value={outputs || 'None selected'} sub="Node.js · npm" />
+            <SummaryBox label="QA environment" value={qaConn ? <span className="mono">{qaConn.name}</span> : 'Not configured'} sub={qaConn ? `${qaConn.authType} · ${qaConn.secretResolvable ? 'secret ready' : 'secret missing'}` : 'Integration will be NOT RUN'} />
+            <SummaryBox label="Limits" value={`$${d.settings.maxCostUsdPerBuild} · ${d.settings.maxRepairRounds} repair rounds`} sub={`timeout ${d.settings.buildTimeoutMin} min · ${d.generation ? `${d.generation.effective.model} · reasoning ${d.generation.effective.reasoningEffort ?? 'default'}` : d.settings.codexModel}`} />
           </div>
           <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-3 hover:bg-muted/40">
             <input type="checkbox" className="mt-0.5 size-4 accent-[var(--brand)]" checked={runIntegration} disabled={!qaConn} onChange={(e) => setRunIntegration(e.target.checked)} />
-            <span className="text-sm">Chạy integration test{qaConn && <> trên env <b className="mono">{qaConn.name}</b></>}
-              <span className="block text-xs text-muted-foreground">{qaConn ? (qaConn.allowWrite ? 'Cho phép tool ghi chạy trên fixture' : 'Chỉ chạy tool đọc; tool ghi sẽ BLOCKED') : 'Thêm connection “Dùng cho QA” để bật'}</span>
+            <span className="text-sm">Run integration tests{qaConn && <> on env <b className="mono">{qaConn.name}</b></>}
+              <span className="block text-xs text-muted-foreground">{qaConn ? (qaConn.allowWrite ? 'Write tools are verified through live test cases' : 'Read tools only; write tools will be BLOCKED') : 'Add a “Use for QA” connection to enable'}</span>
             </span>
           </label>
           {!d.codex.configured && (
             <div className="alert alert-danger">
               <TriangleAlert className="mt-0.5 size-4 shrink-0 text-danger" />
-              <div>Codex chưa được đăng nhập nên build không thể sinh code. <Link href="/settings" className="font-medium underline underline-offset-2" onClick={onClose}>Đăng nhập trong Settings › Codex</Link></div>
+              <div>Codex is not signed in, so builds cannot generate code. <Link href="/settings" className="font-medium underline underline-offset-2" onClick={onClose}>Sign in under Settings › Codex</Link></div>
             </div>
           )}
           <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-3 hover:bg-muted/40">
             <input type="checkbox" className="mt-0.5 size-4 accent-[var(--brand)]" checked={runAgentEval} onChange={(e) => setRunAgentEval(e.target.checked)} />
-            <span className="text-sm">Chạy agent task evaluation
-              <span className="block text-xs text-muted-foreground">Codex dùng MCP tool vừa build để làm tối đa 5 tác vụ mẫu trong context (tốn thêm token)</span>
+            <span className="text-sm">Run agent task evaluation
+              <span className="block text-xs text-muted-foreground">Codex uses the freshly built MCP tools on up to 5 sample tasks from the context (uses extra tokens)</span>
             </span>
           </label>
-          {selected.length === 0 && <InlineError error="Chưa chọn tool nào. Vào Tool designer để chọn endpoint." />}
-          {selectedUnsupported.length > 0 && <InlineError error={`Có ${selectedUnsupported.length} tool không được hỗ trợ đang được chọn.`} />}
-          {!outputs && <InlineError error="Project chưa chọn đầu ra (MCP / CLI)." />}
+          {selected.length === 0 && <InlineError error="No tools selected. Pick endpoints in the Tool designer." />}
+          {selectedUnsupported.length > 0 && <InlineError error={`${selectedUnsupported.length} unsupported tools are selected.`} />}
+          {!outputs && <InlineError error="The project has no output selected (MCP / CLI)." />}
           {d.conflicts.length > 0 && (
             <div className="alert alert-warning">
               <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" />
-              <div>Còn {d.conflicts.length} mâu thuẫn giữa context và spec. Bạn vẫn có thể Export; mâu thuẫn sẽ được ghi vào QA report.</div>
+              <div>{d.conflicts.length} conflicts remain between the context and the spec. You can still export; they are recorded in the QA report.</div>
             </div>
           )}
           <InlineError error={err} />

@@ -13,29 +13,29 @@ export default function DashboardPage() {
     <>
       <PageHeader
         title="Dashboard"
-        description="Tổng quan các bộ tool cho AI agents trong workspace."
-        actions={<Link href="/projects/new" className="btn btn-outline"><Plus className="size-4" />Tạo Tool Project</Link>}
+        description="Overview of the agent tool sets in this workspace."
+        actions={<Link href="/projects/new" className="btn btn-outline"><Plus className="size-4" />New Tool Project</Link>}
       />
       <Loaded q={q}>
         {(d) => (
           <>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <Stat label="Tool Projects" icon={<Boxes className="size-4" />} value={d.stats.projects} sub={`${d.stats.releasedProjects} project có bản release`} />
-              <Stat label="Job đang chạy" icon={<Activity className="size-4" />} value={d.stats.runningBuilds} sub={d.running.map((b) => b.projectName).join(' · ') || 'Không có job nào'} />
-              <Stat label="QA thất bại · 7 ngày" icon={<ShieldAlert className="size-4 text-danger" />} value={d.stats.failedQa7d} valueClass={d.stats.failedQa7d ? 'text-danger' : ''} sub="Build không đạt Package verified" />
-              <Stat label="Phiên bản mới · 7 ngày" icon={<GitBranch className="size-4" />} value={d.stats.newVersions7d} sub={<><span className="text-success">{d.stats.integrationVerified7d}</span> Integration verified</>} />
+              <Stat label="Tool Projects" icon={<Boxes className="size-4" />} value={d.stats.projects} sub={`${d.stats.releasedProjects} with a release`} />
+              <Stat label="Running jobs" icon={<Activity className="size-4" />} value={d.stats.runningBuilds} sub={d.running.map((b) => b.projectName).join(' · ') || 'No jobs'} />
+              <Stat label="QA failures · 7 days" icon={<ShieldAlert className="size-4 text-danger" />} value={d.stats.failedQa7d} valueClass={d.stats.failedQa7d ? 'text-danger' : ''} sub="Builds that failed Package verified" />
+              <Stat label="New versions · 7 days" icon={<GitBranch className="size-4" />} value={d.stats.newVersions7d} sub={<><span className="text-success">{d.stats.integrationVerified7d}</span> Integration verified</>} />
             </div>
 
             <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-3">
               <Card className="overflow-hidden xl:col-span-2">
-                <CardHeader title="Tool Projects" description="Release hiện tại, build mới nhất và bản nháp" />
+                <CardHeader title="Tool Projects" description="Current release, latest build and draft" />
                 {d.projects.length === 0 ? (
-                  <EmptyState icon={<Boxes className="size-5" />} title="Chưa có project nào" description="Tạo project đầu tiên rồi import Swagger để bắt đầu."
-                    action={<Link href="/projects/new" className="btn btn-primary btn-sm"><Plus className="size-3.5" />Tạo project</Link>} />
+                  <EmptyState icon={<Boxes className="size-5" />} title="No projects yet" description="Create your first project and import a Swagger spec to get started."
+                    action={<Link href="/projects/new" className="btn btn-primary btn-sm"><Plus className="size-3.5" />New project</Link>} />
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="tbl">
-                      <thead><tr><th>Project</th><th>Owner</th><th>Release</th><th>Build mới nhất</th><th>Bản nháp</th></tr></thead>
+                      <thead><tr><th>Project</th><th>Owner</th><th>Release</th><th>Latest build</th><th>Draft</th></tr></thead>
                       <tbody>
                         {d.projects.map((p) => (
                           <tr key={p.id}>
@@ -53,7 +53,7 @@ export default function DashboardPage() {
                                   {p.latestBuild.packageVerified !== null && <Badge tone={p.latestBuild.packageVerified ? 'success' : 'danger'}>Package {p.latestBuild.packageVerified ? '✓' : '✗'}</Badge>}
                                   {p.latestBuild.integrationVerified && <Badge tone={verdictMeta[p.latestBuild.integrationVerified].tone}>{verdictMeta[p.latestBuild.integrationVerified].label}</Badge>}
                                 </div>
-                              ) : <span className="text-muted-foreground">Chưa build</span>}
+                              ) : <span className="text-muted-foreground">Not built</span>}
                             </td>
                             <td>{p.latestDraft ? <Badge tone={versionStatusMeta.draft.tone}>{p.latestDraft.number}</Badge> : <span className="text-muted-foreground">—</span>}</td>
                           </tr>
@@ -66,16 +66,16 @@ export default function DashboardPage() {
 
               <div className="flex flex-col gap-4">
                 <Card>
-                  <CardHeader title="Job đang chạy" actions={d.running.length > 0 && <Badge tone="info"><span className="size-1.5 animate-pulse rounded-full bg-info" />Live</Badge>} />
+                  <CardHeader title="Running jobs" actions={d.running.length > 0 && <Badge tone="info"><span className="size-1.5 animate-pulse rounded-full bg-info" />Live</Badge>} />
                   <div className="space-y-4 px-5 pb-5">
-                    {d.running.length === 0 && <p className="text-sm text-muted-foreground">Không có job nào đang chạy.</p>}
+                    {d.running.length === 0 && <p className="text-sm text-muted-foreground">No jobs running.</p>}
                     {d.running.map((b) => {
                       const idx = b.stage ? STAGES.indexOf(b.stage) : 0;
                       const pct = Math.round(((idx + 0.5) / STAGES.length) * 100);
                       return (
                         <Link key={b.id} href={`/projects/${b.projectId}/builds/${b.id}`} className="block rounded-md hover:bg-muted/40">
                           <div className="flex items-center justify-between text-sm"><span className="font-medium">{b.projectName} · {b.versionNumber}</span><span className="mono text-xs text-muted-foreground">{b.label}</span></div>
-                          <div className="mt-1 text-xs text-muted-foreground">{b.stage ? stageLabel[b.stage] : 'Đang chờ worker'}</div>
+                          <div className="mt-1 text-xs text-muted-foreground">{b.stage ? stageLabel[b.stage] : 'Waiting for a worker'}</div>
                           <div className="progress mt-2"><span style={{ width: `${pct}%` }} /></div>
                         </Link>
                       );
@@ -83,7 +83,7 @@ export default function DashboardPage() {
                   </div>
                 </Card>
                 <Card>
-                  <CardHeader title="Ngân sách tháng này" description="Chi phí Codex ước tính theo token" />
+                  <CardHeader title="This month's budget" description="Codex cost estimated from tokens" />
                   <div className="px-5 pb-5">
                     <div className="flex justify-between text-xs"><span className="text-muted-foreground">Codex generation</span><span className="tabular-nums"><b>{fmtUsd(d.budget.costUsdMonth)}</b> / {fmtUsd(d.budget.budgetUsdMonth)}</span></div>
                     <div className="progress mt-2"><span style={{ width: `${Math.min(100, (d.budget.costUsdMonth / Math.max(1, d.budget.budgetUsdMonth)) * 100)}%` }} /></div>
@@ -93,8 +93,8 @@ export default function DashboardPage() {
             </div>
 
             <Card className="mt-4">
-              <CardHeader title="Hoạt động gần đây" />
-              {d.activity.length === 0 ? <p className="px-5 pb-5 text-sm text-muted-foreground">Chưa có hoạt động.</p> : (
+              <CardHeader title="Recent activity" />
+              {d.activity.length === 0 ? <p className="px-5 pb-5 text-sm text-muted-foreground">No activity yet.</p> : (
                 <ol className="space-y-3 px-5 pb-5">
                   {d.activity.map((a) => (
                     <li key={a.id} className="flex gap-3">

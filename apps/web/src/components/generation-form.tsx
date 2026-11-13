@@ -6,15 +6,15 @@ import type { CodexModelOption, GenerationProfile, ModelCheckResult, ReasoningEf
 import { api } from '@/lib/api';
 import { Field, InlineError, Spinner } from './ui';
 
-export const RULES_HINT = 'Ghi thành AGENTS.md trong workspace build. Chỉ bổ sung quy ước (ngôn ngữ thông báo lỗi, cách rút gọn response, đặt tên…); không thể nới các ràng buộc cố định: phạm vi file, không mạng, không secret, không thêm dependency.';
+export const RULES_HINT = 'Written to AGENTS.md in the build workspace. Add conventions only (error message language, response trimming, naming…); fixed constraints cannot be relaxed: file scope, no network, no secrets, no new dependencies.';
 
-const SAMPLE_RULES = `## Quy ước sinh adapter
+const SAMPLE_RULES = `## Adapter conventions
 
-- Thông báo lỗi (describeError) viết bằng tiếng Việt, ngắn gọn, nêu bước agent nên làm tiếp.
-- Luôn giữ id, mã chứng từ, trạng thái, tổng tiền và nextCursor trong response; không bỏ trường phân trang.
-- Chỉ rút gọn response danh sách khi mỗi phần tử có hơn 15 trường; giữ nguyên thứ tự phần tử.
-- Tiền tệ là VND (số nguyên), không tự đổi đơn vị hay làm tròn.
-- Không đoán quy tắc nghiệp vụ không có trong context.md.
+- Error messages (describeError) are short and say what the agent should do next.
+- Always keep ids, document codes, statuses, totals and nextCursor in responses; never drop pagination fields.
+- Only trim list responses when items have more than 15 fields; keep item order.
+- Amounts are integer VND; never convert units or round.
+- Never guess business rules that are not in context.md.
 `;
 
 /**
@@ -44,10 +44,10 @@ export function GenerationFields({ value, onChange, models, inheritedModel, inhe
   return (
     <div className="space-y-5">
       <div className="grid gap-5 sm:grid-cols-2">
-        <Field label="Model" hint={value.model === null ? `Đang dùng ${inheritedLabel}.` : 'Gõ slug khác nếu model không có trong danh sách.'}>
+        <Field label="Model" hint={value.model === null ? `Using ${inheritedLabel}.` : 'Type another slug if the model is not listed.'}>
           {(id) => (
             <>
-              <input id={id} list={`${id}-models`} className="input font-mono text-xs" placeholder={`${inheritedModel} (mặc định)`}
+              <input id={id} list={`${id}-models`} className="input font-mono text-xs" placeholder={`${inheritedModel} (default)`}
                 value={value.model ?? ''} onChange={(e) => { setCheck(null); onChange({ ...value, model: e.target.value.trim() || null }); }} />
               <datalist id={`${id}-models`}>
                 {models.map((m) => <option key={m.slug} value={m.slug}>{m.displayName}</option>)}
@@ -55,10 +55,10 @@ export function GenerationFields({ value, onChange, models, inheritedModel, inhe
             </>
           )}
         </Field>
-        <Field label="Reasoning effort" hint={`Mặc định của ${effectiveModel}: ${opt?.defaultReasoning ?? 'không rõ'}.`}>
+        <Field label="Reasoning effort" hint={`${effectiveModel} default: ${opt?.defaultReasoning ?? 'unknown'}.`}>
           {(id) => (
             <select id={id} className="input" value={value.reasoningEffort ?? ''} onChange={(e) => onChange({ ...value, reasoningEffort: (e.target.value || null) as ReasoningEffort | null })}>
-              <option value="">Mặc định của model{opt?.defaultReasoning ? ` (${opt.defaultReasoning})` : ''}</option>
+              <option value="">Model default{opt?.defaultReasoning ? ` (${opt.defaultReasoning})` : ''}</option>
               {[...new Set([...efforts, ...(value.reasoningEffort ? [value.reasoningEffort] : [])])].map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
           )}
@@ -66,17 +66,17 @@ export function GenerationFields({ value, onChange, models, inheritedModel, inhe
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <button type="button" className="btn btn-outline btn-sm" disabled={checking || !effectiveModel} onClick={runCheck}>
-          {checking ? <Spinner /> : <FlaskConical className="size-3.5" />}Kiểm tra model
+          {checking ? <Spinner /> : <FlaskConical className="size-3.5" />}Check model
         </button>
-        {checking && <span className="text-xs text-muted-foreground">Đang chạy một lệnh Codex nhỏ với {effectiveModel}… (30–60 giây)</span>}
+        {checking && <span className="text-xs text-muted-foreground">Running a tiny Codex turn with {effectiveModel}… (30–60 seconds)</span>}
         {check?.ok && <span className="inline-flex items-center gap-1.5 text-xs text-success"><CheckCircle2 className="size-3.5" />{check.model}: {check.message}</span>}
       </div>
       {check && !check.ok && <InlineError error={`${check.model}: ${check.message}`} />}
       <InlineError error={checkErr} />
       <Field label={<span className="flex items-center justify-between gap-2">{rulesLabel}
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => onChange({ ...value, rules: value.rules.trim() ? `${value.rules.trimEnd()}\n\n${SAMPLE_RULES}` : SAMPLE_RULES })}><Sparkles className="size-3.5" />Chèn mẫu</button></span>}
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => onChange({ ...value, rules: value.rules.trim() ? `${value.rules.trimEnd()}\n\n${SAMPLE_RULES}` : SAMPLE_RULES })}><Sparkles className="size-3.5" />Insert example</button></span>}
         hint={RULES_HINT}>
-        {(id) => <textarea id={id} className="textarea min-h-[220px] font-mono text-xs" spellCheck={false} placeholder="## Quy ước của đội…" value={value.rules} onChange={(e) => onChange({ ...value, rules: e.target.value })} />}
+        {(id) => <textarea id={id} className="textarea min-h-[220px] font-mono text-xs" spellCheck={false} placeholder="## Team conventions…" value={value.rules} onChange={(e) => onChange({ ...value, rules: e.target.value })} />}
       </Field>
     </div>
   );

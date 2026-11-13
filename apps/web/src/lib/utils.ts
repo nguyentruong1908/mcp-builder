@@ -7,10 +7,10 @@ export const cn = (...v: ClassValue[]) => twMerge(clsx(v));
 export type Tone = 'success' | 'warning' | 'danger' | 'info' | 'brand' | 'outline';
 
 export const impactMeta: Record<Impact, { label: string; tone: Tone }> = {
-  read: { label: 'Đọc', tone: 'info' },
-  write: { label: 'Ghi dữ liệu', tone: 'warning' },
-  side_effect: { label: 'Tác động ngoài', tone: 'warning' },
-  destructive: { label: 'Xóa', tone: 'danger' },
+  read: { label: 'Read', tone: 'info' },
+  write: { label: 'Write', tone: 'warning' },
+  side_effect: { label: 'Side effect', tone: 'warning' },
+  destructive: { label: 'Delete', tone: 'danger' },
 };
 
 export const methodCls: Record<string, string> = {
@@ -23,16 +23,16 @@ export const methodCls: Record<string, string> = {
 
 export const LAYERS: QaLayer[] = ['input', 'build', 'interface', 'contract', 'error', 'runtime', 'integration', 'agent', 'custom', 'install'];
 export const layerMeta: Record<QaLayer, { label: string; short: string; description: string }> = {
-  input: { label: 'Input validation', short: 'Input', description: 'Spec, $ref, schema của tool' },
+  input: { label: 'Input validation', short: 'Input', description: 'Spec, $ref, tool schemas' },
   build: { label: 'Build & static', short: 'Build', description: 'Compile, typecheck, secret scan' },
   interface: { label: 'MCP / CLI interface', short: 'Interface', description: 'tools/list, schema, --help, exit code' },
   contract: { label: 'API contract', short: 'Contract', description: 'Method, path, query, body' },
   error: { label: 'Error handling', short: 'Error', description: '401/404/429/5xx' },
-  runtime: { label: 'Runtime behavior', short: 'Runtime', description: 'Phân trang, retry, idempotency' },
-  integration: { label: 'Integration', short: 'Integration', description: 'API thật · env QA' },
-  agent: { label: 'Agent task eval', short: 'Agent', description: 'Tác vụ mẫu từ context' },
-  custom: { label: 'Test case tùy chỉnh', short: 'Custom', description: 'Do người dùng định nghĩa' },
-  install: { label: 'Installation', short: 'Install', description: 'Cài vào môi trường sạch' },
+  runtime: { label: 'Runtime behavior', short: 'Runtime', description: 'Pagination, retry, idempotency' },
+  integration: { label: 'Integration', short: 'Integration', description: 'Live API · QA environment' },
+  agent: { label: 'Agent task eval', short: 'Agent', description: 'Sample tasks from context' },
+  custom: { label: 'Custom test cases', short: 'Custom', description: 'Defined by you' },
+  install: { label: 'Installation', short: 'Install', description: 'Install into a clean environment' },
 };
 
 export const qaMeta: Record<QaStatus, { label: string; tone: Tone }> = {
@@ -43,23 +43,23 @@ export const qaMeta: Record<QaStatus, { label: string; tone: Tone }> = {
 };
 
 export const buildStatusMeta: Record<BuildStatus, { label: string; tone: Tone }> = {
-  queued: { label: 'Đang chờ', tone: 'outline' },
-  running: { label: 'Đang chạy', tone: 'info' },
-  succeeded: { label: 'Hoàn tất', tone: 'success' },
-  failed: { label: 'Thất bại', tone: 'danger' },
-  cancelled: { label: 'Đã hủy', tone: 'outline' },
+  queued: { label: 'Queued', tone: 'outline' },
+  running: { label: 'Running', tone: 'info' },
+  succeeded: { label: 'Succeeded', tone: 'success' },
+  failed: { label: 'Failed', tone: 'danger' },
+  cancelled: { label: 'Cancelled', tone: 'outline' },
 };
 export const isActive = (s: BuildStatus) => s === 'queued' || s === 'running';
 
 export const versionStatusMeta: Record<VersionStatus, { label: string; tone: Tone }> = {
-  draft: { label: 'Bản nháp', tone: 'outline' },
+  draft: { label: 'Draft', tone: 'outline' },
   released: { label: 'Released', tone: 'success' },
   deprecated: { label: 'Deprecated', tone: 'warning' },
 };
 
 export const verdictMeta: Record<IntegrationVerdict, { label: string; tone: Tone }> = {
   yes: { label: 'Integration ✓', tone: 'success' },
-  partial: { label: 'Integration một phần', tone: 'warning' },
+  partial: { label: 'Integration partial', tone: 'warning' },
   no: { label: 'Integration ✗', tone: 'danger' },
   not_run: { label: 'Integration NOT RUN', tone: 'outline' },
 };
@@ -70,7 +70,7 @@ export const stageLabel: Record<StageName, string> = {
 };
 export const stageDone = (s: StageState) => s === 'ok' || s === 'skipped';
 
-const dtf = new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+const dtf = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 export const fmtDate = (iso: string | null | undefined) => (iso ? dtf.format(new Date(iso)) : '—');
 
 export function fmtDuration(ms: number | null | undefined) {

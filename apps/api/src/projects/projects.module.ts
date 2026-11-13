@@ -9,7 +9,7 @@ import { PrismaService } from '../core/prisma.service.js';
 import { parse, slugify } from '../core/util.js';
 import type { Prisma, Project } from '../generated/prisma/client.js';
 
-const outputsSchema = z.object({ mcp: z.boolean(), cli: z.boolean() }).refine((o) => o.mcp || o.cli, 'Chọn ít nhất một đầu ra');
+const outputsSchema = z.object({ mcp: z.boolean(), cli: z.boolean() }).refine((o) => o.mcp || o.cli, 'Select at least one output');
 const createSchema = z.object({
   name: z.string().trim().min(2).max(120),
   description: z.string().max(2000).optional(),
@@ -73,7 +73,7 @@ export class ProjectsService {
 
   async get(id: string): Promise<Project> {
     const p = await this.prisma.project.findUnique({ where: { id } });
-    if (!p) throw new NotFoundException('Project không tồn tại');
+    if (!p) throw new NotFoundException('Project not found');
     return p;
   }
 
@@ -92,15 +92,15 @@ export class ProjectsService {
     const b = s.latestBuild;
     const qaConn = conns.find((c) => c.useForQa);
     const steps: ProjectStep[] = [
-      { key: 'project', label: 'Tạo project', state: 'done' },
-      { key: 'spec', label: 'Nhập Swagger', state: spec ? 'done' : 'todo', detail: spec ? `OAS ${spec.oasVersion}` : undefined },
-      { key: 'validate', label: 'Kiểm tra đầu vào', state: !spec ? 'todo' : errors ? 'fail' : warns ? 'warn' : 'done', detail: spec ? (errors ? `${errors} lỗi` : warns ? `${warns} cảnh báo` : 'Hợp lệ') : undefined },
-      { key: 'context', label: 'Context', state: !ctx?.purpose ? 'todo' : conflicts.some((c) => c.severity === 'warning') ? 'warn' : 'done', detail: conflicts.length ? `${conflicts.length} lưu ý` : undefined },
-      { key: 'scope', label: 'Phạm vi', state: s.selectedCount ? 'done' : 'todo', detail: spec ? `${s.selectedCount}/${s.toolCount} endpoint` : undefined },
-      { key: 'connection', label: 'Kết nối', state: qaConn ? 'done' : conns.length ? 'warn' : 'todo', detail: qaConn ? `env ${qaConn.name}` : conns.length ? 'Chưa có env cho QA' : undefined },
+      { key: 'project', label: 'Create project', state: 'done' },
+      { key: 'spec', label: 'Import spec', state: spec ? 'done' : 'todo', detail: spec ? `OAS ${spec.oasVersion}` : undefined },
+      { key: 'validate', label: 'Validate input', state: !spec ? 'todo' : errors ? 'fail' : warns ? 'warn' : 'done', detail: spec ? (errors ? `${errors} errors` : warns ? `${warns} warnings` : 'Valid') : undefined },
+      { key: 'context', label: 'Context', state: !ctx?.purpose ? 'todo' : conflicts.some((c) => c.severity === 'warning') ? 'warn' : 'done', detail: conflicts.length ? `${conflicts.length} notes` : undefined },
+      { key: 'scope', label: 'Scope', state: s.selectedCount ? 'done' : 'todo', detail: spec ? `${s.selectedCount}/${s.toolCount} endpoint` : undefined },
+      { key: 'connection', label: 'Connections', state: qaConn ? 'done' : conns.length ? 'warn' : 'todo', detail: qaConn ? `env ${qaConn.name}` : conns.length ? 'No QA environment' : undefined },
       { key: 'export', label: 'Export', state: !b ? 'todo' : b.status === 'failed' ? 'fail' : b.status === 'succeeded' ? 'done' : 'todo', detail: b ? `${b.label} · ${b.status}` : undefined },
-      { key: 'result', label: 'Kết quả', state: b?.packageVerified ? (b.integrationVerified === 'yes' ? 'done' : 'warn') : b?.packageVerified === false ? 'fail' : 'todo', detail: b?.packageVerified ? `Integration: ${b.integrationVerified}` : b?.packageVerified === false ? 'Bản nháp' : undefined },
-      { key: 'next', label: 'Version tiếp', state: s.currentRelease ? 'done' : 'todo', detail: s.currentRelease ? `v${s.currentRelease.number}` : undefined },
+      { key: 'result', label: 'Result', state: b?.packageVerified ? (b.integrationVerified === 'yes' ? 'done' : 'warn') : b?.packageVerified === false ? 'fail' : 'todo', detail: b?.packageVerified ? `Integration: ${b.integrationVerified}` : b?.packageVerified === false ? 'Draft' : undefined },
+      { key: 'next', label: 'Next version', state: s.currentRelease ? 'done' : 'todo', detail: s.currentRelease ? `v${s.currentRelease.number}` : undefined },
     ];
     return { ...s, steps };
   }
@@ -161,13 +161,14 @@ export class ProjectsService {
       for (const g of (ctx.glossary as unknown as GlossaryEntry[]) ?? []) {
         const tokens = (g.mapping.match(/[A-Za-z_][\w.\-/]*/g) ?? []).map((t) => t.split('.').pop()!.replace(/^\//, ''));
         const missing = tokens.filter((t) => t.length > 1 && !spec.raw.includes(t));
-        if (missing.length) out.push({ id: `glossary:${g.term}`, severity: 'warning', title: `Thuật ngữ "${g.term}" ánh xạ tới phần không có trong spec`, detail: `Không tìm thấy ${missing.map((m) => `"${m}"`).join(', ')} trong Swagger hiện tại.` });
+        if (missing.length) out.push({ id: `glossary:${g.term}`, severity: 'warning', title: `Glossary term "${g.term}" maps to something not in the spec`, detail: `${missing.map((m) => `"${m}"`).join(', ')} not found in the current spec.` });
       }
     }
-    if (writeTools.length && !ctx.impacts.some((i) => /ghi|write|duyệt|xóa|email/i.test(i))) {
-      out.push({ id: 'impacts', severity: 'warning', title: 'Context chưa khai báo tác động ghi', detail: `Có ${writeTools.length} tool có tác động được chọn (${writeTools.map((t) => t.name).join(', ')}) nhưng mục "Tác động" trong context chưa nêu.` });
+    // Impacts are free text; also accept common Vietnamese verbs so non-English contexts are recognised.
+    if (writeTools.length && !ctx.impacts.some((i) => /write|create|update|delete|approve|send|email|ghi|duyệt|xóa/i.test(i))) {
+      out.push({ id: 'impacts', severity: 'warning', title: 'Context does not declare write impacts', detail: `${writeTools.length} selected tools have side effects (${writeTools.map((t) => t.name).join(', ')}) but the context "Impacts" field does not mention them.` });
     }
-    if (!ctx.sampleTasks.trim()) out.push({ id: 'tasks', severity: 'info', title: 'Chưa có tác vụ mẫu', detail: 'Agent task evaluation cần tác vụ mẫu để có căn cứ đánh giá.' });
+    if (!ctx.sampleTasks.trim()) out.push({ id: 'tasks', severity: 'info', title: 'No sample tasks', detail: 'Agent task evaluation needs sample tasks to evaluate against.' });
     return out;
   }
 
@@ -238,7 +239,7 @@ export class ProjectsController {
   @Put('settings')
   async putSettings(@Body() body: unknown): Promise<SettingsDto> {
     const input = parse(settingsSchema, body);
-    if (!Object.keys(input).length) throw new BadRequestException('Không có thay đổi');
+    if (!Object.keys(input).length) throw new BadRequestException('No changes');
     const res = await this.settings.update(input);
     await this.audit.log('settings.update', 'limits', input);
     return res;

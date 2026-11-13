@@ -42,7 +42,7 @@ export function Spinner({ className }: { className?: string }) {
   return <Loader2 aria-hidden className={cn('size-4 animate-spin', className)} />;
 }
 
-export function LoadingBlock({ label = 'Đang tải…' }: { label?: string }) {
+export function LoadingBlock({ label = 'Loading…' }: { label?: string }) {
   return (
     <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground" role="status">
       <Spinner /> {label}
@@ -67,11 +67,11 @@ export function ErrorState({ error, onRetry }: { error: Error; onRetry?: () => v
     <Card className="mx-auto max-w-xl">
       <EmptyState
         icon={down ? <ServerOff className="size-5" /> : <AlertTriangle className="size-5 text-danger" />}
-        title={down ? 'Không kết nối được API' : 'Có lỗi khi tải dữ liệu'}
+        title={down ? 'Cannot reach the API' : 'Failed to load data'}
         description={
           down ? (
             <>
-              Kiểm tra API đang chạy tại <code className="mono text-foreground">{API_URL}</code> (đặt <code className="mono">NEXT_PUBLIC_API_URL</code> nếu khác).
+              Check that the API is running at <code className="mono text-foreground">{API_URL}</code> (set <code className="mono">NEXT_PUBLIC_API_URL</code> if it differs).
             </>
           ) : (
             error.message
@@ -79,7 +79,7 @@ export function ErrorState({ error, onRetry }: { error: Error; onRetry?: () => v
         }
         action={onRetry && (
           <button className="btn btn-outline btn-sm" onClick={onRetry}>
-            <RefreshCw className="size-3.5" /> Thử lại
+            <RefreshCw className="size-3.5" /> Retry
           </button>
         )}
       />
@@ -155,7 +155,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
             <h2 id={titleId} className="text-base font-semibold">{title}</h2>
             {description && <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>}
           </div>
-          <button className="btn btn-ghost btn-icon size-8" onClick={onClose} aria-label="Đóng"><X className="size-4" /></button>
+          <button className="btn btn-ghost btn-icon size-8" onClick={onClose} aria-label="Close"><X className="size-4" /></button>
         </div>
         <div className="overflow-y-auto px-6 py-5">{children}</div>
         {footer && <div className="flex justify-end gap-2 border-t bg-muted/30 px-6 py-3">{footer}</div>}

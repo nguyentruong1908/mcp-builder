@@ -1,81 +1,141 @@
-# MCP Factory
+<p align="center">
+  <img src="brand/logo-wordmark.svg" alt="MCP Factory" height="56">
+</p>
 
-Biến API hiện có (OpenAPI 3.0.x) thành bộ công cụ cho AI agents, gồm **MCP server** (stdio/HTTP) và **CLI**. Code được sinh bằng **Codex SDK**, kiểm thử bởi QA runner độc lập, đóng gói kèm checksum và provenance.
+<p align="center">
+  Turn an existing REST API into tested tools for AI agents: an <b>MCP server</b> and a <b>CLI</b>, generated with Codex, verified by an independent QA suite, and shipped with provenance.
+</p>
 
-- Thiết kế kỹ thuật: [docs/design.md](docs/design.md)
-- UI draft gốc: [ui-draft/index.html](ui-draft/index.html)
-- Logo (do Codex CLI sinh): [brand/](brand/)
+---
 
-## Cấu trúc
+## Why
 
-| Thư mục | Nội dung |
+Teams that want agents to work with their ERP, CRM or internal services usually hand-write MCP servers per API. That is slow, uneven in quality, and hard to trust: nobody can say what was tested, against which spec, with which generator.
+
+MCP Factory makes that a repeatable product workflow:
+
+- **From the spec you already have.** Import OpenAPI 3.0, add business context, pick the operations agents may use.
+- **Generated, not hand-written.** Codex writes the per-tool adapters on top of a tested runtime, so the generated surface stays small.
+- **Evidence over claims.** The Factory runs its own QA suite against the package. A report written by a model never counts as a test result, and a mock pass is never reported as an integration pass.
+- **Traceable versions.** Every package records the spec, context, tools, template, Codex model and profile it was built from.
+
+## Screenshots
+
+| | |
 |---|---|
-| `apps/web` | Next.js 16 + Tailwind 4 (admin UI) |
-| `apps/api` | NestJS 12 + Prisma 7 + PostgreSQL, worker build chạy trong tiến trình |
-| `packages/shared` | Kiểu dữ liệu API dùng chung (types only) |
-| `templates/mcp-node` | Runtime nền cho package đầu ra (MCP + CLI dùng chung `factory/tools.json`) |
-| `examples/sample-erp` | API mẫu (OpenAPI + server in-memory) để thử end-to-end |
+| ![Project overview](docs/screenshots/overview.png) | ![Tool designer](docs/screenshots/tool-designer.png) |
+| **Project overview**: progress, latest build, generation profile | **Tool designer**: choose operations, impacts and descriptions |
+| ![Build](docs/screenshots/build.png) | ![QA report](docs/screenshots/qa-report.png) |
+| **Build**: live pipeline and Codex logs | **QA report**: verdicts, layers, coverage |
+| ![Agent evaluation](docs/screenshots/agent-eval.png) | ![Test cases](docs/screenshots/test-cases.png) |
+| **Agent evaluation**: a Codex agent uses the new tools | **Test cases**: single calls and multi-step flows with cleanup |
 
-## Triển khai bằng Docker Compose
+> The screenshots come from a demo project built against a small sample ERP API used during development. The demo is not part of the product.
 
-Stack gồm `postgres`, `api` (NestJS + worker build + Codex CLI), `web` (Next.js standalone) và `gateway` (Caddy: UI và `/api` chung một cổng, stream log SSE không buffer).
+## How it works
 
-```bash
-cp .env.example .env            # đổi POSTGRES_PASSWORD, CODEX_MODEL…
+1. **Create a project** and import an OpenAPI 3.0 spec (upload or allow-listed URL). Unsupported parts (multipart uploads, file streaming, OAuth2 flows) are reported, never silently dropped.
+2. **Add context**: purpose, business rules, glossary, sample tasks for agents.
+3. **Design the tools**: select operations, confirm each tool's impact (read, write, side effect, destructive), refine names and descriptions. One definition drives both MCP and CLI.
+4. **Connect a QA environment**: base URL plus a secret reference (`env://NAME`). Writes and agent permissions are opt-in per environment.
+5. **Export**: a background job runs five stages and streams logs:
+
+   | Stage | What happens |
+   |---|---|
+   | spec | Workspace from the `mcp-node` template, dependencies installed |
+   | codex | Codex writes `src/adapters/*.ts` and the README, following the team's `AGENTS.md` rules |
+   | build | TypeScript build with Codex repair rounds, then a secret scan |
+   | qa | Independent QA suite, then QA-driven repair rounds for fixable failures |
+   | package | `npm pack`, sha256, `provenance.json`, `qa-report.json` |
+
+6. **Release** a version once it is *Package verified*, download the tarball, and connect it to any MCP client (stdio or Streamable HTTP) or use it as a CLI.
+
+### QA suite
+
+| Layer | Checks |
+|---|---|
+| Input / build | Tool definitions, TypeScript build, secret scan |
+| Interface | MCP `tools/list` matches the definitions; CLI help, exit codes, JSON output |
+| Contract | Each tool against a Factory-built mock: method, path, query, body, auth |
+| Error handling | 401/404/500 and malformed responses become clear `isError` results |
+| Runtime | Retries only for reads, timeouts |
+| Integration | Read tools on the live QA environment; write tools only through user-written live test cases |
+| Agent evaluation | A Codex agent performs the sample tasks with the generated MCP server; scored from observed tool calls |
+| Custom test cases | Single calls or multi-step flows (`{{step1.id}}` placeholders, cleanup steps) on mock or live |
+| Install | The tarball installs and runs in a clean directory |
+
+Two labels come out of it: **Package verified** (the artifact behaves correctly) and **Integration verified** (it works against the real API). A *QA run* re-runs the whole suite on an existing build's code without regenerating it.
+
+### Tuning generation per team
+
+A **generation profile** sets the Codex model, reasoning effort, and team rules. Rules are written to `AGENTS.md` in the build workspace; they can refine style (error message wording, response shaping) but cannot loosen fixed guardrails, which the Factory enforces in code (Codex may only edit adapters and the README; no network; no secrets; no new dependencies). Projects can override the workspace profile, and every build records the profile version and rules hash.
+
+## Architecture
+
+```
+            ┌──────────────────────── gateway (Caddy) ────────────────────────┐
+browser ───▶│  /        → web (Next.js 16, React 19, Tailwind 4)              │
+            │  /api/*   → api (NestJS 12, Prisma 7)  ──▶ PostgreSQL 16       │
+            └──────────────────────────────────┬──────────────────────────────┘
+                                               │ in-process worker (FOR UPDATE SKIP LOCKED)
+                                               ▼
+                 build workspace ─ Codex SDK (adapters) ─ tsc ─ QA runner ─ npm pack
+                                               │
+                         data volume: workspaces, artifacts, Codex sign-in
 ```
 
+| Path | Contents |
+|---|---|
+| `apps/web` | Admin UI |
+| `apps/api` | REST + SSE API, build worker, QA runner |
+| `packages/shared` | API contract types shared by web and api |
+| `templates/mcp-node` | Runtime of every generated package: MCP server (stdio/HTTP) and CLI over `factory/tools.json` |
+| `deploy/` | Gateway configuration |
+| `docs/design.md` | Technical design: data model, API, pipeline, QA rules |
+| `brand/` | Logo, generated with Codex CLI |
+| `ui-draft/` | The original single-file UI concept |
+
+## Quick start (Docker)
+
+Requirements: Docker with Compose v2.24+, and a Codex account (ChatGPT sign-in or an OpenAI API key).
+
 ```bash
-cp secrets.env.example secrets.env   # secret cho connection dạng env://NAME (tùy chọn)
+cp .env.example .env
 ```
 
 ```bash
 docker compose up -d --build
 ```
 
-Mở `http://localhost:8080`, vào **Settings › Codex** và chọn một trong ba cách đăng nhập:
+Open `http://localhost:8080`, go to **Settings › Codex** and sign in. Device-code sign-in is recommended: the server shows a link and a one-time code you confirm in any browser. You can also save an API key or upload an `auth.json` from `codex login`. Credentials stay in the `factory-data` volume and are never returned by the API.
 
-| Cách | Khi nào dùng |
-|---|---|
-| **ChatGPT (device code)** | Khuyên dùng. Server chạy `codex login --device-auth`, bạn nhập mã một lần trên trình duyệt bất kỳ |
-| **API key** | Dùng key OpenAI riêng cho Factory (`codex login --with-api-key`) |
-| **Upload auth.json** | Có sẵn `~/.codex/auth.json` từ `codex login` ở máy khác. Nếu file đó vẫn được dùng ở máy kia, làm mới token ở một bên có thể đăng xuất bên còn lại |
+Secrets for QA environments go in an optional `secrets.env` (see `secrets.env.example`) and are referenced from connections as `env://NAME`.
 
-Thông tin đăng nhập nằm trong volume `factory-data` (`/data/codex-home/auth.json`, quyền 600), không vào database và API không bao giờ trả lại token. Có thể dùng `CODEX_API_KEY` trong `.env` thay cho đăng nhập qua UI.
+### Configuration
 
-Thử với API mẫu: `docker compose --profile demo up -d`, import spec `http://sample-erp:4010/openapi.yaml`, tạo connection base URL `http://sample-erp:4010`, bearer, secret `env://SAMPLE_ERP_TOKEN`.
-
-**Lưu ý khi đưa lên server:**
-- Bản này **chưa có đăng nhập người dùng**. Ai truy cập được cổng đều quản lý được tài khoản Codex và build. Mặc định gateway chỉ bind `127.0.0.1:8080`. Muốn mở ra ngoài, đặt sau reverse proxy có TLS và xác thực (VD: Caddy `basic_auth`, Cloudflare Access, VPN), rồi chỉnh `MCP_FACTORY_BIND`.
-- Xem mục **Codex sandbox trong Docker** bên dưới trước khi chạy build đầu tiên.
-- Sao lưu volume `pgdata` (dữ liệu) và `factory-data` (artifact và đăng nhập Codex).
-- Cập nhật: `git pull && docker compose up -d --build`. Migration chạy tự động khi API khởi động.
-
-### Codex sandbox trong Docker
-
-Codex chạy lệnh của nó trong sandbox bubblewrap: không có mạng, chỉ ghi được vào workspace của build. Bubblewrap cần user namespace, mà profile seccomp/AppArmor mặc định của Docker chặn. Vì vậy compose **mặc định đặt `CODEX_SANDBOX=danger-full-access`**: Codex không tự sandbox, container `api` là ranh giới cô lập. Nếu muốn bật lại sandbox của Codex (`CODEX_SANDBOX=workspace-write`), Settings › Codex sẽ báo lỗi cho đến khi chọn cách 1 hoặc 3:
-
-| Cách | Cấu hình | Đánh đổi |
+| Variable | Default | Purpose |
 |---|---|---|
-| Nới profile cho service `api` | thêm `security_opt: [seccomp=unconfined, apparmor=unconfined]` vào `api` trong `docker-compose.yml` | Sandbox của Codex hoạt động (không mạng, chỉ ghi workspace), nhưng container `api` mất lớp lọc syscall mặc định của Docker |
-| Tắt sandbox của Codex (**mặc định**) | `CODEX_SANDBOX=danger-full-access` | Container là ranh giới duy nhất. Codex có mạng và đọc được `/data` (gồm `auth.json`); spec độc hại có thể tìm cách lộ thông tin đăng nhập |
-| Seccomp profile riêng | profile mặc định của Docker cộng quyền `unshare`/`clone` với `CLONE_NEWUSER` | An toàn nhất nhưng cần tự bảo trì profile |
+| `MCP_FACTORY_BIND` | `127.0.0.1:8080` | Where the gateway listens |
+| `POSTGRES_PASSWORD` | `mcp` | Database password |
+| `CODEX_MODEL` | `gpt-6-sol` | Default model when no profile sets one |
+| `CODEX_SANDBOX` | `danger-full-access` | Codex sandbox mode (see below) |
+| `CODEX_API_KEY` | empty | Optional API key instead of signing in through the UI |
+| `SPEC_FETCH_ALLOWLIST` | `localhost` | Hosts allowed for "import spec by URL" |
 
-Đã kiểm chứng trên Docker Desktop: với cách thứ nhất, lệnh trong sandbox Codex không ghi được ra ngoài thư mục cho phép và không gọi được mạng nội bộ của compose.
+**Codex sandbox in Docker.** Codex sandboxes its own commands with bubblewrap, which needs user namespaces that Docker's default seccomp profile blocks. The compose file therefore runs Codex with `danger-full-access`, making the `api` container the isolation boundary. Alternatives: give the `api` service `security_opt: [seccomp=unconfined, apparmor=unconfined]` and set `CODEX_SANDBOX=workspace-write`, or maintain a custom seccomp profile that allows `unshare`.
 
-## Chạy local (dev)
+**Exposing it beyond localhost.** This version has no user accounts: anyone who reaches the port can manage the Codex sign-in and run builds. Put it behind a reverse proxy with TLS and authentication (or a VPN) before changing `MCP_FACTORY_BIND`.
 
-Yêu cầu: Node 20+ (đã thử với 24), pnpm 9, PostgreSQL 16. Codex CLI đi kèm SDK; đăng nhập trong **Settings › Codex** (lưu ở `data/codex-home`, tách khỏi `~/.codex` của máy).
+## Local development
+
+Requirements: Node 20+ (tested on 24), pnpm 9, PostgreSQL 16.
 
 ```bash
 pnpm install
 ```
 
 ```bash
-cp apps/api/.env.example apps/api/.env   # sửa DATABASE_URL, CODEX_MODEL nếu cần
-```
-
-```bash
-pnpm db:up          # hoặc dùng PostgreSQL có sẵn, tạo DB mcp_factory
+cp apps/api/.env.example apps/api/.env
 ```
 
 ```bash
@@ -83,46 +143,43 @@ pnpm db:migrate
 ```
 
 ```bash
-pnpm --filter api build && pnpm --filter api start   # API :4000
+pnpm --filter api build && pnpm --filter api start
 ```
 
 ```bash
-pnpm --filter web dev                                # Web :3000
+pnpm --filter web dev
 ```
 
-```bash
-node examples/sample-erp/server.mjs                  # API mẫu :4010 (token: dev-token)
-```
-
-Thử nhanh: tạo project → *API & Context* → import `http://localhost:4010/openapi.yaml` → *Connections* thêm môi trường `test`, base URL `http://localhost:4010`, bearer, secret `env://SAMPLE_ERP_TOKEN`, bật "Dùng cho QA" → **Export**.
-
-## QA độc lập và test case
-
-- **Chạy QA** (trang QA hoặc trang build): chạy lại toàn bộ QA trên code của một build có sẵn, bỏ qua bước Codex generation. Kết quả là một run riêng `kind: qa`, gắn nhãn "trên code của b-000X", có log live và QA report như build thường.
-- **Test case** (trang QA › Test case), dùng cho cả Export lẫn QA run:
-  - *Gọi tool*: tool + tham số JSON, chạy trên mock (có thể giả lập response, VD 409) hoặc API thật qua connection QA. Kỳ vọng: có lỗi hay không, loại lỗi (`conflict`, `not_found`…), chuỗi phải xuất hiện. Test fail sẽ chặn Package verified.
-  - *Tác vụ agent*: Codex dùng MCP tool vừa build để làm tác vụ. Chấm theo lệnh gọi tool thực tế, tool mong đợi và chuỗi phải có trong câu trả lời.
-- **Agent task evaluation** còn lấy tác vụ mẫu trong Context (mỗi dòng một tác vụ, thêm `=> tên_tool` để chấm việc chọn tool). Tối đa 5 tác vụ mỗi lần chạy (`AGENT_EVAL_MAX_TASKS`). Trên API thật agent chỉ thấy tool đọc, trừ khi môi trường cho phép ghi.
-
-## Tùy biến chất lượng sinh code
-
-- **Generation profile** (Settings › Generation profile; project ghi đè ở trang Overview):
-  - *Model* và *reasoning effort*: project ghi đè workspace, workspace ghi đè `CODEX_MODEL`. Nút "Kiểm tra model" chạy một lượt Codex nhỏ để xác nhận tài khoản dùng được model đó.
-  - *Quy tắc*: markdown của workspace, rồi quy tắc riêng của project nối sau. Được ghi thành `AGENTS.md` trong workspace build; Codex tự đọc file này, nó không được đóng vào package. Quy tắc chỉ tinh chỉnh cách viết, không nới được các ràng buộc cố định (vùng file được sửa, secret, dependency), vì những ràng buộc này do code của Factory cưỡng chế.
-  - Mỗi lần lưu tăng version. Build ghi `model`, `reasoningEffort`, `generationProfile` (VD `workspace@v3+project@v1`) và `rulesSha256` vào provenance.
-- **Vòng tự sửa theo QA** (Settings › Ngân sách, mặc định 2 vòng, 0 = tắt): sau QA, các lỗi sửa được bằng code adapter (contract, xử lý lỗi, runtime, test case, integration, agent chọn sai tool) được gửi lại cho cùng thread Codex. Sau đó build lại và chạy lại toàn bộ QA. Lỗi hạ tầng hoặc lỗi định nghĩa tool không được gửi. Vòng nào không giảm được lỗi thì dừng.
-- **Agent eval** chạy với sandbox theo `CODEX_SANDBOX` (Docker: full access) và tự duyệt mọi lệnh gọi tool trong danh sách Factory cho phép. Tool ghi chỉ được bật khi môi trường QA cho phép ghi, nên agent có thể thay đổi dữ liệu thật trên môi trường đó. Agent dùng shell thay vì tool vẫn bị tính là fail.
-
-## Lưu ý vận hành
-
-- **Codex luôn chạy thật** (không có mock). Mỗi build tốn token theo tài khoản Codex của máy chủ; ngân sách và trần chi phí cấu hình ở *Settings*.
-- `CODEX_MODEL` phải là model tài khoản của bạn được dùng (với tài khoản ChatGPT trên máy này: `gpt-6-sol`).
-- Secret của môi trường chỉ lưu dạng tham chiếu `env://TEN_BIEN`; giá trị đặt trong env của API (`apps/api/.env`).
-- Build cần mạng để `npm install` dependency của package đầu ra. Bản thân Codex chạy trong sandbox `workspace-write`, không có mạng.
-- Workspace và artifact nằm ở `data/` (ngoài DB, đã gitignore).
-
-## Test
+The API listens on `:4000`, the web app on `:3000`. Tests:
 
 ```bash
 pnpm --filter api build && pnpm --filter api test
 ```
+
+## Roadmap
+
+**Done (MVP)**
+- [x] OpenAPI 3.0 import with validation, unsupported-feature reporting, snapshots and diff
+- [x] Tool designer with impacts, confirmation hints and a shared MCP/CLI definition
+- [x] Codex generation with protected files, build repair rounds and QA-driven repair rounds
+- [x] Independent QA suite, agent evaluation, custom and multi-step test cases, standalone QA runs
+- [x] Generation profiles (model, reasoning, `AGENTS.md` rules) with project overrides and provenance
+- [x] Versions, release gate, artifacts with checksums and provenance
+- [x] Codex sign-in from the UI, Docker Compose deployment
+
+**Next**
+- [ ] User accounts and roles (developer, domain expert, reviewer, admin, agent developer) and team-level profiles
+- [ ] Regenerate-on-change: spec diff that re-runs only affected tools and tests
+- [ ] Profile comparison: same project, two profiles, compare QA scores, cost and time
+- [ ] Golden example adapters per team
+- [ ] Automated pagination and idempotency checks
+- [ ] Private-network runner for APIs that are not reachable from the Factory
+
+**Later**
+- [ ] Managed hosting of generated MCP servers (deploy, domain/TLS, secrets, logs, quotas)
+- [ ] OAuth2 flows, multipart uploads, file streaming, OpenAPI 3.1
+- [ ] More output runtimes (Python), multi-API workflows, plugin and skills distribution
+
+## License
+
+See [LICENSE](LICENSE).

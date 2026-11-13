@@ -85,7 +85,7 @@ function securityReason(op: Obj, doc: Obj): string | null {
   if (reqs.some((alt) => Object.keys(alt).length === 0 || Object.keys(alt).every(supported))) return null;
   const names = [...new Set(reqs.flatMap((alt) => Object.keys(alt)))];
   const kinds = names.map((n) => (schemes[n]?.type === 'apiKey' ? `apiKey in ${schemes[n].in}` : schemes[n]?.type === 'http' ? `http ${schemes[n].scheme}` : schemes[n]?.type ?? n));
-  return `Xác thực chưa hỗ trợ: ${kinds.join(', ')} (MVP hỗ trợ API key qua header và bearer token)`;
+  return `Unsupported authentication: ${kinds.join(', ')} (the MVP supports header API keys and bearer tokens)`;
 }
 
 function normalizeOperation(doc: Obj, path: string, method: string, item: Obj, op: Obj, issues: SpecIssue[]): Omit<NormalizedOperation, 'toolName'> {
@@ -100,8 +100,8 @@ function normalizeOperation(doc: Obj, path: string, method: string, item: Obj, o
   for (const p of [...(item.parameters ?? []), ...(op.parameters ?? [])]) merged.set(`${p.in}:${p.name}`, p);
   for (const p of merged.values()) {
     if (p.in === 'cookie') {
-      if (p.required) reasons.push(`Tham số cookie bắt buộc "${p.name}"`);
-      else issues.push({ level: 'warning', operation: opLabel, message: `Bỏ qua tham số cookie "${p.name}"` });
+      if (p.required) reasons.push(`Required cookie parameter "${p.name}"`);
+      else issues.push({ level: 'warning', operation: opLabel, message: `Ignored cookie parameter "${p.name}"` });
       continue;
     }
     const schema = p.schema ?? (p.content ? (Object.values(p.content)[0] as Obj)?.schema : undefined);
@@ -116,8 +116,8 @@ function normalizeOperation(doc: Obj, path: string, method: string, item: Obj, o
     const jsonKey = types.find((t) => /json/i.test(t));
     if (!jsonKey) {
       if (types.some((t) => t.startsWith('multipart/'))) reasons.push('multipart/form-data (file upload)');
-      else if (types.some((t) => t.includes('octet-stream'))) reasons.push('Request body nhị phân (application/octet-stream)');
-      else reasons.push(`Content-Type chưa hỗ trợ: ${types.join(', ') || '(trống)'}`);
+      else if (types.some((t) => t.includes('octet-stream'))) reasons.push('Binary request body (application/octet-stream)');
+      else reasons.push(`Unsupported Content-Type: ${types.join(', ') || '(empty)'}`);
     } else {
       const schema: Obj = rb.content[jsonKey].schema ?? {};
       const props: Obj | undefined = schema.properties;
@@ -141,15 +141,15 @@ function normalizeOperation(doc: Obj, path: string, method: string, item: Obj, o
   const codes = Object.keys(op.responses ?? {});
   const successStatus = codes.find((c) => /^2/.test(c)) ?? (codes.includes('default') ? 'default' : null);
   let responseSchema: unknown = null;
-  if (!successStatus) issues.push({ level: 'warning', operation: opLabel, message: 'Không khai báo response 2xx' });
+  if (!successStatus) issues.push({ level: 'warning', operation: opLabel, message: 'No 2xx response declared' });
   else {
     const content: Obj | undefined = op.responses[successStatus]?.content;
     const types = Object.keys(content ?? {});
     const jsonKey = types.find((t) => /json/i.test(t));
-    if (types.length && !jsonKey) reasons.push(`File streaming / response nhị phân (${types.join(', ')})`);
+    if (types.length && !jsonKey) reasons.push(`File streaming / binary response (${types.join(', ')})`);
     else if (jsonKey) {
       responseSchema = content![jsonKey].schema ?? null;
-      if (!responseSchema) issues.push({ level: 'warning', operation: opLabel, message: `Response ${successStatus} không có schema; output của tool sẽ không được mô tả` });
+      if (!responseSchema) issues.push({ level: 'warning', operation: opLabel, message: `Response ${successStatus} has no schema; the tool output will be undescribed` });
     }
   }
 
@@ -184,30 +184,30 @@ export async function processSpec(raw: string): Promise<ProcessedSpec> {
   try {
     doc = YAML.parse(raw, { maxAliasCount: 100 });
   } catch (err) {
-    throw new SpecError(`Không đọc được JSON/YAML: ${(err as Error).message}`);
+    throw new SpecError(`Cannot parse JSON/YAML: ${(err as Error).message}`);
   }
-  if (!doc || typeof doc !== 'object') throw new SpecError('Nội dung không phải một tài liệu OpenAPI');
-  if (doc.swagger) throw new SpecError('Swagger 2.0 chưa được hỗ trợ. Hãy chuyển sang OpenAPI 3.0.x');
+  if (!doc || typeof doc !== 'object') throw new SpecError('Content is not an OpenAPI document');
+  if (doc.swagger) throw new SpecError('Swagger 2.0 is not supported. Convert it to OpenAPI 3.0.x');
   const oasVersion = String(doc.openapi ?? '');
-  if (!oasVersion) throw new SpecError('Thiếu trường "openapi"');
+  if (!oasVersion) throw new SpecError('Missing "openapi" field');
   const issues: SpecIssue[] = [];
-  if (oasVersion.startsWith('3.1.')) issues.push({ level: 'warning', message: 'OpenAPI 3.1 chưa nằm trong support matrix (MVP ưu tiên 3.0.x); kết quả có thể thiếu chính xác' });
-  else if (!oasVersion.startsWith('3.0.')) throw new SpecError(`Phiên bản OpenAPI ${oasVersion} chưa được hỗ trợ`);
+  if (oasVersion.startsWith('3.1.')) issues.push({ level: 'warning', message: 'OpenAPI 3.1 is outside the support matrix (the MVP targets 3.0.x); results may be inaccurate' });
+  else if (!oasVersion.startsWith('3.0.')) throw new SpecError(`OpenAPI version ${oasVersion} is not supported`);
 
   const external = findExternalRefs(doc);
-  if (external.length) throw new SpecError(`$ref ngoài tài liệu bị chặn vì lý do bảo mật: ${[...new Set(external)].slice(0, 5).join(', ')}`);
+  if (external.length) throw new SpecError(`External $ref blocked for security reasons: ${[...new Set(external)].slice(0, 5).join(', ')}`);
 
   const opts = { resolve: { external: false }, dereference: { circular: 'ignore' as const } };
   try {
     await SwaggerParser.validate(structuredClone(doc) as any, opts as any);
   } catch (err) {
-    issues.push({ level: 'error', message: `Spec không hợp lệ: ${(err as Error).message.split('\n')[0]}` });
+    issues.push({ level: 'error', message: `Invalid spec: ${(err as Error).message.split('\n')[0]}` });
   }
   let deref: Obj;
   try {
     deref = (await SwaggerParser.dereference(structuredClone(doc) as any, opts as any)) as unknown as Obj;
   } catch (err) {
-    throw new SpecError(`Không resolve được $ref: ${(err as Error).message}`);
+    throw new SpecError(`Cannot resolve $ref: ${(err as Error).message}`);
   }
 
   const operations: NormalizedOperation[] = [];
@@ -223,7 +223,7 @@ export async function processSpec(raw: string): Promise<ProcessedSpec> {
       operations.push({ ...n, toolName: name });
     }
   }
-  if (!operations.length) issues.push({ level: 'error', message: 'Spec không có operation nào' });
+  if (!operations.length) issues.push({ level: 'error', message: 'The spec has no operations' });
 
   return {
     oasVersion,
@@ -254,19 +254,19 @@ export function diffOperations(from: NormalizedOperation[], to: NormalizedOperat
     const nm = new Map(next.params.map((p) => [`${p.in}:${p.name}`, p]));
     for (const [pk, p] of nm) {
       const old = pm.get(pk);
-      if (!old) { changes.push(`Thêm tham số ${p.in} "${p.name}"${p.required ? ' (bắt buộc)' : ''}`); if (p.required) breaking = true; }
+      if (!old) { changes.push(`Added ${p.in} parameter "${p.name}"${p.required ? ' (required)' : ''}`); if (p.required) breaking = true; }
       else {
         if (old.type !== p.type) { changes.push(`"${p.name}": ${old.type} → ${p.type}`); breaking = true; }
-        if (!old.required && p.required) { changes.push(`"${p.name}" trở thành bắt buộc`); breaking = true; }
+        if (!old.required && p.required) { changes.push(`"${p.name}" became required`); breaking = true; }
       }
     }
-    for (const [pk, p] of pm) if (!nm.has(pk)) { changes.push(`Xóa tham số ${p.in} "${p.name}"`); breaking = true; }
-    if (JSON.stringify(prev.responseSchema) !== JSON.stringify(next.responseSchema)) changes.push('Response schema thay đổi');
-    changed.push({ method: next.method, path: next.path, changes: changes.length ? changes : ['Định nghĩa thay đổi'] });
+    for (const [pk, p] of pm) if (!nm.has(pk)) { changes.push(`Removed ${p.in} parameter "${p.name}"`); breaking = true; }
+    if (JSON.stringify(prev.responseSchema) !== JSON.stringify(next.responseSchema)) changes.push('Response schema changed');
+    changed.push({ method: next.method, path: next.path, changes: changes.length ? changes : ['Definition changed'] });
   }
 
   const affectedTools = [
-    ...removed.map((o) => ({ op: o, reason: 'Endpoint bị xóa' })),
+    ...removed.map((o) => ({ op: o, reason: 'Endpoint removed' })),
     ...changed.map((c) => ({ op: c, reason: c.changes.join('; ') })),
   ].flatMap(({ op, reason }) => {
     const name = toolNames.get(key(op));

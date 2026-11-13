@@ -274,6 +274,7 @@ model TestCase {
   target         String   @default("mock") // mock | live
   mockResponse   Json?
   expect         Json     @default("{}")
+  steps          Json     @default("[]") // TestStep[] for kind tool_steps
   task           String?
   expectedTools  String[] @default([])
   answerContains String[] @default([])

@@ -24,4 +24,10 @@ export const codexHome = resolve(apiRoot, process.env.CODEX_HOME_DIR ?? `${confi
 /** workspace-write (default) or danger-full-access when the container itself is the isolation boundary. */
 export const codexSandbox = (process.env.CODEX_SANDBOX === 'danger-full-access' ? 'danger-full-access' : 'workspace-write') as 'workspace-write' | 'danger-full-access';
 
+/**
+ * Codex features turned off for every Factory-driven Codex run: plugins, marketplace skills and apps
+ * would otherwise be pulled into builds, costing tokens and making output depend on the account's catalog.
+ */
+export const CODEX_ISOLATION_CONFIG = { features: { plugins: false, remote_plugin: false, plugin_discovery_prefetch: false, apps: false } };
+
 export const DEFAULT_SETTINGS = { maxCostUsdPerBuild: 15, maxRepairRounds: 3, maxQaRepairRounds: 2, monthlyBudgetUsd: 500, buildTimeoutMin: 30 };

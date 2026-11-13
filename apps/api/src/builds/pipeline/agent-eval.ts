@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Codex } from '@openai/codex-sdk';
-import { codexHome, codexSandbox, config } from '../../config.js';
+import { CODEX_ISOLATION_CONFIG, codexHome, codexSandbox, config } from '../../config.js';
 import { resolveSecret } from '../../core/util.js';
 import { MockApi } from './mock-api.js';
 import { minimalEnv } from './proc.js';
@@ -14,7 +14,7 @@ const SERVER = 'factory';
 
 export interface SampleTask { text: string; expected: string[]; answerContains?: string[]; label?: string }
 
-/** One task per line; bullets are stripped. Optional expected tools: "Tra đơn của khách A => search_sales_orders, get_sales_order". */
+/** One task per line; bullets are stripped. Optional expected tools: "Find customer A's orders => search_sales_orders, get_sales_order". */
 export function parseSampleTasks(raw: string): SampleTask[] {
   return raw.split('\n')
     .map((l) => l.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim())
@@ -32,14 +32,18 @@ const OUTPUT_SCHEMA = {
     completed: { type: 'boolean', description: 'true if the task was fully accomplished using the tools' },
     answer: { type: 'string', description: 'final answer for the user' },
     blockedReason: { type: ['string', 'null'], description: 'if not completed because no available tool can do it, explain; otherwise null' },
+    preconditionFailed: { type: ['string', 'null'], description: 'if the current data, checked with the tools, makes the task inapplicable (e.g. already done, wrong state), explain; otherwise null' },
+    cleanup: { type: ['string', 'null'], description: 'test data you created and what you did with it (removed / left in place and why); null if you created none' },
   },
-  required: ['completed', 'answer', 'blockedReason'],
+  required: ['completed', 'answer', 'blockedReason', 'preconditionFailed', 'cleanup'],
   additionalProperties: false,
 } as const;
 
 const prompt = (task: string) => `You are an AI agent evaluated on how well you use the MCP tools of the "${SERVER}" server to accomplish a business task.
 Use only those MCP tools. Do not run shell commands, do not read files, do not guess data you did not get from a tool.
 If no available tool can accomplish the task, do not improvise: set completed=false and explain in blockedReason.
+If you checked the data with the tools and its current state makes the task inapplicable (already done, wrong status, missing record), do not force it: set completed=false and explain in preconditionFailed.
+This runs on a shared test environment. If you created data that is not part of the expected outcome, you may remove it with the available tools; only touch data you created during this task, never pre-existing data. Report what you did in cleanup.
 Answer in the same language as the task.
 
 Task: ${task}`;
@@ -53,7 +57,7 @@ interface ToolCall { tool: string; args: unknown; ok: boolean; category?: string
 export async function runAgentEval(ctx: BuildCtx, tasks: SampleTask[]): Promise<QaRow[]> {
   const rows: QaRow[] = [];
   const toolRows = (status: QaRow['status'], detail: string) => ctx.tools.map((t) => ({ layer: 'agent' as const, tool: t.name, name: 'Agent task evaluation', status, detail }));
-  if (!tasks.length) return toolRows('not_run', 'Context chưa có tác vụ mẫu (mục "Tác vụ mẫu")');
+  if (!tasks.length) return toolRows('not_run', 'The context has no sample tasks ("Sample tasks" field)');
 
   // Environment: real API (read tools; write tools only if the env allows writes) or the Factory mock.
   const conn = ctx.qaConnection;
@@ -75,14 +79,15 @@ export async function runAgentEval(ctx: BuildCtx, tasks: SampleTask[]): Promise<
     env.API_BASE_URL = mock.url;
     env.API_TOKEN = 'qa-token';
   }
-  const envLabel = live ? `API thật (${conn!.name})` : 'mock API của Factory';
-  await ctx.log('info', 'qa', `Agent eval: ${Math.min(tasks.length, AGENT_EVAL_MAX_TASKS)} tác vụ · ${envLabel} · quyền ${access} · tool: ${enabled.join(', ')}`);
+  const envLabel = live ? `live API (${conn!.name})` : 'Factory mock API';
+  await ctx.log('info', 'qa', `Agent eval: ${Math.min(tasks.length, AGENT_EVAL_MAX_TASKS)} tasks · ${envLabel} · access ${access} · tools: ${enabled.join(', ')}`);
 
   const codex = new Codex({
     // Secrets reach the MCP server via env_vars passthrough, never via argv. Codex's shell policy excludes *TOKEN*/*KEY* vars by default.
     env: minimalEnv({ CODEX_HOME: codexHome, ...env }),
     ...(process.env.CODEX_API_KEY ? { apiKey: process.env.CODEX_API_KEY } : {}),
     config: {
+      ...CODEX_ISOLATION_CONFIG,
       mcp_servers: {
         [SERVER]: {
           command: process.execPath,
@@ -108,7 +113,7 @@ export async function runAgentEval(ctx: BuildCtx, tasks: SampleTask[]): Promise<
       const missing = task.expected.filter((t) => !enabled.includes(t));
       if (missing.length) {
         const unknown = missing.filter((t) => !ctx.tools.some((x) => x.name === t));
-        rows.push({ layer: 'agent', tool: null, name: task.label ?? task.text, status: 'blocked', detail: unknown.length ? `Tool mong đợi không có trong bộ tool: ${unknown.join(', ')}` : `Agent chưa được phép dùng ${missing.join(', ')} trên ${envLabel}. Cấp quyền ở Connections › "Agent eval được phép".`, evidence: { task: task.text, expected: task.expected, env: envLabel } });
+        rows.push({ layer: 'agent', tool: null, name: task.label ?? task.text, status: 'blocked', detail: unknown.length ? `Expected tools are not in the tool set: ${unknown.join(', ')}` : `The agent may not use ${missing.join(', ')} on the ${envLabel}. Grant access in Connections › "Agent eval access".`, evidence: { task: task.text, expected: task.expected, env: envLabel } });
         continue;
       }
 
@@ -134,19 +139,19 @@ export async function runAgentEval(ctx: BuildCtx, tasks: SampleTask[]): Promise<
             else if (it.type === 'agent_message') final = it.text;
           } else if (ev.type === 'turn.completed') {
             const cost = await ctx.addUsage(ev.usage);
-            if (cost > ctx.limits.maxCostUsd) throw new BuildAbort(`Vượt trần chi phí $${ctx.limits.maxCostUsd} trong agent eval (đã dùng $${cost.toFixed(2)})`);
+            if (cost > ctx.limits.maxCostUsd) throw new BuildAbort(`Cost cap $${ctx.limits.maxCostUsd} exceeded during agent eval (spent $${cost.toFixed(2)})`);
           } else if (ev.type === 'turn.failed') throw new Error(ev.error.message);
         }
       } catch (err) {
         if (err instanceof BuildAbort || ctx.signal.aborted) throw err;
-        final = JSON.stringify({ completed: false, answer: '', blockedReason: null, error: timer.signal.aborted ? 'Quá thời gian 4 phút' : (err as Error).message });
+        final = JSON.stringify({ completed: false, answer: '', blockedReason: null, error: timer.signal.aborted ? 'Timed out after 4 minutes' : (err as Error).message });
       } finally {
         clearTimeout(t);
         ctx.signal.removeEventListener('abort', onAbort);
         await rm(dir, { recursive: true, force: true });
       }
 
-      let out: { completed?: boolean; answer?: string; blockedReason?: string | null; error?: string } = {};
+      let out: { completed?: boolean; answer?: string; blockedReason?: string | null; preconditionFailed?: string | null; cleanup?: string | null; error?: string } = {};
       try { out = JSON.parse(final); } catch { out = { completed: false, answer: final }; }
       const called = [...new Set(calls.map((c) => c.tool))];
       // Business errors (404/409/400) are legitimate tool results; infrastructure errors are failures.
@@ -155,20 +160,24 @@ export async function runAgentEval(ctx: BuildCtx, tasks: SampleTask[]): Promise<
       // Mock data is synthetic, so expected answer content is only checked against the real API.
       const missingAnswer = !live ? [] : (task.answerContains ?? []).filter((s) => !(out.answer ?? '').toLowerCase().includes(s.toLowerCase()));
       const problems = [
-        out.error && `Agent lỗi: ${out.error}`,
-        !calls.length && !out.blockedReason && 'Agent không gọi tool nào',
-        missingExpected.length && `Không gọi tool mong đợi: ${missingExpected.join(', ')}`,
-        missingAnswer.length && `Câu trả lời thiếu: ${missingAnswer.map((s) => `"${s}"`).join(', ')}`,
-        hardErrors.length && `Tool lỗi: ${hardErrors.map((c) => `${c.tool} [${c.category}]`).join(', ')}`,
-        shell && `Agent chạy ${shell} lệnh shell thay vì chỉ dùng tool`,
-        !out.completed && !out.blockedReason && 'Agent không hoàn thành tác vụ',
+        out.error && `Agent error: ${out.error}`,
+        !calls.length && !out.blockedReason && 'The agent called no tools',
+        missingExpected.length && `Expected tools not called: ${missingExpected.join(', ')}`,
+        missingAnswer.length && `Answer is missing: ${missingAnswer.map((s) => `"${s}"`).join(', ')}`,
+        hardErrors.length && `Tool errors: ${hardErrors.map((c) => `${c.tool} [${c.category}]`).join(', ')}`,
+        shell && `The agent ran ${shell} shell commands instead of using only tools`,
+        !out.completed && !out.blockedReason && 'The agent did not complete the task',
       ].filter(Boolean) as string[];
-      const status: QaRow['status'] = problems.length ? 'fail' : out.completed ? 'pass' : 'blocked';
-      const summary = called.length ? `Gọi: ${calls.map((c) => `${c.tool}(${JSON.stringify(c.args)})${c.ok ? '' : ` [${c.category}]`}`).join(' → ')}` : 'Không gọi tool';
-      const detail = status === 'pass' ? `${summary}. Trả lời: ${(out.answer ?? '').slice(0, 300)}`
-        : status === 'blocked' ? `Agent báo không làm được: ${out.blockedReason}. ${summary}`
+      // The agent verified with tools that the data state makes the task inapplicable: a test-data issue, not a tool failure.
+      // Wrong tool choices without such an explanation still fail.
+      const precondition = !!out.preconditionFailed && calls.length > 0 && !hardErrors.length && !shell && !out.error;
+      const status: QaRow['status'] = precondition ? 'blocked' : problems.length ? 'fail' : out.completed ? 'pass' : 'blocked';
+      const summary = called.length ? `Calls: ${calls.map((c) => `${c.tool}(${JSON.stringify(c.args)})${c.ok ? '' : ` [${c.category}]`}`).join(' → ')}` : 'No tool calls';
+      const detail = status === 'pass' ? `${summary}. Answer: ${(out.answer ?? '').slice(0, 300)}`
+        : precondition ? `Precondition not met (the agent checked with tools): ${out.preconditionFailed}. Review the test data or write a task that creates its own data. ${summary}`
+        : status === 'blocked' ? `The agent reported it cannot do this: ${out.blockedReason}. ${summary}`
           : `${problems.join('; ')}. ${summary}`;
-      rows.push({ layer: 'agent', tool: null, name: task.label ?? task.text, status, detail, evidence: { task: task.text, expected: task.expected, answerContains: task.answerContains ?? [], testCase: task.label ?? null, env: envLabel, calls, answer: out.answer ?? '', blockedReason: out.blockedReason ?? null } });
+      rows.push({ layer: 'agent', tool: null, name: task.label ?? task.text, status, detail: detail + (out.cleanup ? ` Agent cleanup report: ${out.cleanup}` : ''), evidence: { task: task.text, expected: task.expected, answerContains: task.answerContains ?? [], testCase: task.label ?? null, env: envLabel, calls, cleanup: out.cleanup ?? null, answer: out.answer ?? '', blockedReason: out.blockedReason ?? null, preconditionFailed: out.preconditionFailed ?? null } });
       for (const c of calls) mark(c.tool, status === 'pass' && c.ok ? 'pass' : status === 'fail' ? 'fail' : 'blocked');
       await ctx.log(status === 'pass' ? 'success' : status === 'fail' ? 'error' : 'warn', 'qa', `Agent [${status}] ${task.text} · ${summary}`);
     }
@@ -176,10 +185,10 @@ export async function runAgentEval(ctx: BuildCtx, tasks: SampleTask[]): Promise<
     await mock?.close();
   }
 
-  if (tasks.length > AGENT_EVAL_MAX_TASKS) rows.push({ layer: 'agent', tool: null, name: `${tasks.length - AGENT_EVAL_MAX_TASKS} tác vụ còn lại`, status: 'not_run', detail: `Giới hạn ${AGENT_EVAL_MAX_TASKS} tác vụ mỗi build (AGENT_EVAL_MAX_TASKS)` });
+  if (tasks.length > AGENT_EVAL_MAX_TASKS) rows.push({ layer: 'agent', tool: null, name: `${tasks.length - AGENT_EVAL_MAX_TASKS} remaining tasks`, status: 'not_run', detail: `Limited to ${AGENT_EVAL_MAX_TASKS} tasks per build (AGENT_EVAL_MAX_TASKS)` });
   for (const t of ctx.tools) {
     const s = used.get(t.name);
-    rows.push({ layer: 'agent', tool: t.name, name: 'Agent task evaluation', status: s ?? 'not_run', detail: s ? `Được agent dùng trong tác vụ mẫu (${envLabel})` : enabled.includes(t.name) ? 'Không tác vụ mẫu nào cần tool này' : `Agent chưa được phép dùng tool này trên ${envLabel} (quyền ${access})` });
+    rows.push({ layer: 'agent', tool: t.name, name: 'Agent task evaluation', status: s ?? 'not_run', detail: s ? `Used by the agent in sample tasks (${envLabel})` : enabled.includes(t.name) ? 'No sample task needs this tool' : `The agent may not use this tool on the ${envLabel} (access ${access})` });
   }
   return rows;
 }

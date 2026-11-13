@@ -1,6 +1,6 @@
 import { mkdirSync } from 'node:fs';
 import { Codex, type Thread } from '@openai/codex-sdk';
-import { codexHome, codexSandbox, config } from '../../config.js';
+import { CODEX_ISOLATION_CONFIG, codexHome, codexSandbox, config } from '../../config.js';
 import { minimalEnv } from './proc.js';
 import { BuildAbort, type BuildCtx } from './types.js';
 
@@ -8,6 +8,7 @@ export function startThread(ctx: BuildCtx): Thread {
   mkdirSync(codexHome, { recursive: true, mode: 0o700 });
   // Always the Factory-managed CODEX_HOME: personal ~/.codex plugins/config never influence builds.
   const codex = new Codex({
+    config: CODEX_ISOLATION_CONFIG,
     env: minimalEnv({ CODEX_HOME: codexHome }),
     ...(process.env.CODEX_API_KEY ? { apiKey: process.env.CODEX_API_KEY } : {}),
   });
@@ -71,7 +72,7 @@ export async function runTurn(ctx: BuildCtx, thread: Thread, prompt: string): Pr
     } else if (ev.type === 'turn.completed') {
       const cost = await ctx.addUsage(ev.usage);
       await ctx.log('info', 'codex', `turn done · in ${ev.usage.input_tokens} (cached ${ev.usage.cached_input_tokens}) · out ${ev.usage.output_tokens} tokens · total $${cost.toFixed(2)}`);
-      if (cost > ctx.limits.maxCostUsd) throw new BuildAbort(`Vượt trần chi phí $${ctx.limits.maxCostUsd} (đã dùng $${cost.toFixed(2)})`);
+      if (cost > ctx.limits.maxCostUsd) throw new BuildAbort(`Cost cap $${ctx.limits.maxCostUsd} exceeded (spent $${cost.toFixed(2)})`);
     } else if (ev.type === 'turn.failed') {
       throw new Error(`Codex turn failed: ${ev.error.message}`);
     } else if (ev.type === 'error') {
@@ -87,7 +88,7 @@ export const QA_FIXABLE_LAYERS = ['contract', 'error', 'runtime', 'custom', 'int
 /** Failures worth sending back to Codex: adapter-related ones only (not infra/approval errors or derived per-tool agent rows). */
 export function isQaFixable(r: { layer: string; tool: string | null; status: string; detail: string }): boolean {
   if (r.status !== 'fail' || !(QA_FIXABLE_LAYERS as readonly string[]).includes(r.layer)) return false;
-  if (r.layer === 'agent' && (r.tool !== null || /\[mcp\]|Agent lỗi|Quá thời gian/.test(r.detail))) return false;
+  if (r.layer === 'agent' && (r.tool !== null || /\[mcp\]|Agent error|Timed out/.test(r.detail))) return false;
   return true;
 }
 

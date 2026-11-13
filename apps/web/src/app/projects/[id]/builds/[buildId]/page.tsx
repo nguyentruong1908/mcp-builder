@@ -55,7 +55,11 @@ export default function BuildDetailPage() {
       try {
         const ev = JSON.parse(e.data) as BuildEvent;
         if (ev.type === 'log') addLogs([ev.log]);
-        else b.setData((prev) => (prev ? { ...prev, ...ev.build } : prev));
+        else if (ev.type === 'build') {
+          b.setData((prev) => (prev ? { ...prev, ...ev.build } : prev));
+          // Finished build: logs come from REST, so no need to keep a stream open.
+          if (!isActive(ev.build.status)) { closed = true; es.close(); }
+        }
       } catch { /* ignore malformed event */ }
     };
     es.onerror = () => { es.close(); if (!closed) setPolling(true); };
@@ -76,7 +80,7 @@ export default function BuildDetailPage() {
   useEffect(() => {
     if (wasActive.current && !active) {
       b.refetch();
-      window.dispatchEvent(new Event('mf:refresh')); // header "Đang export…" + sidebar
+      window.dispatchEvent(new Event('mf:refresh')); // header "Exporting…" + sidebar
     }
     wasActive.current = active;
   }, [active, b.refetch]);
@@ -91,7 +95,7 @@ export default function BuildDetailPage() {
 
   async function cancel() {
     setCancelling(true);
-    try { await api.cancelBuild(buildId); toast('Đã gửi yêu cầu hủy'); b.refetch(); }
+    try { await api.cancelBuild(buildId); toast('Cancellation requested'); b.refetch(); }
     catch (e) { toast((e as Error).message, 'error'); } finally { setCancelling(false); }
   }
 
@@ -103,10 +107,10 @@ export default function BuildDetailPage() {
           <>
             <PageHeader
               title={<span className="flex flex-wrap items-center gap-3"><span className="mono">{d.label}</span><span className="text-muted-foreground">·</span><span className="mono">{d.versionNumber}</span></span>}
-              description={<span className="flex flex-wrap items-center gap-2">Tạo {fmtDate(d.createdAt)} bởi {d.triggeredBy}<BuildBadges b={d} />{d.kind === 'qa' && d.sourceBuildId && <span>trên code của <Link href={`/projects/${id}/builds/${d.sourceBuildId}`} className="mono text-foreground hover:underline">{d.sourceBuildLabel}</Link></span>}</span>}
+              description={<span className="flex flex-wrap items-center gap-2">Created {fmtDate(d.createdAt)} by {d.triggeredBy}<BuildBadges b={d} />{d.kind === 'qa' && d.sourceBuildId && <span>on the code of <Link href={`/projects/${id}/builds/${d.sourceBuildId}`} className="mono text-foreground hover:underline">{d.sourceBuildLabel}</Link></span>}</span>}
               actions={<>
-                <button className="btn btn-danger btn-sm" disabled={!active || cancelling} onClick={cancel}>{cancelling ? <Spinner className="size-3.5" /> : <Square className="size-3.5" />}Hủy job</button>
-                <button className="btn btn-outline btn-sm" disabled={active || d.stages.build !== 'ok'} title={d.stages.build === 'ok' ? undefined : 'Build chưa có code đã biên dịch'} onClick={() => setQaOpen(true)}><FlaskConical className="size-3.5" />Chạy lại QA</button>
+                <button className="btn btn-danger btn-sm" disabled={!active || cancelling} onClick={cancel}>{cancelling ? <Spinner className="size-3.5" /> : <Square className="size-3.5" />}Cancel job</button>
+                <button className="btn btn-outline btn-sm" disabled={active || d.stages.build !== 'ok'} title={d.stages.build === 'ok' ? undefined : 'This build has no compiled code'} onClick={() => setQaOpen(true)}><FlaskConical className="size-3.5" />Re-run QA</button>
                 <Link className="btn btn-outline btn-sm" href={`/projects/${id}/qa?build=${d.id}`}>QA report</Link>
               </>}
             />
@@ -119,7 +123,7 @@ export default function BuildDetailPage() {
                   const st = d.stages[s];
                   return (
                     <div key={s} className="bg-card p-4">
-                      <div className="flex items-center gap-2">{stageIcon[st]}<span className="text-xs font-medium text-muted-foreground">Bước {i + 1}{st === 'skipped' && ' · Bỏ qua'}</span></div>
+                      <div className="flex items-center gap-2">{stageIcon[st]}<span className="text-xs font-medium text-muted-foreground">Step {i + 1}{st === 'skipped' && ' · Skipped'}</span></div>
                       <div className="mt-1.5 text-sm font-medium">{stageLabel[s]}</div>
                       <div className="progress mt-3">
                         <span className={cn(st === 'ok' && 'bg-success', st === 'failed' && 'bg-danger', st === 'skipped' && 'bg-muted-foreground/40')}
@@ -132,8 +136,8 @@ export default function BuildDetailPage() {
               <div className="grid grid-cols-1 border-t xl:grid-cols-[1fr_340px]">
                 <div className="min-w-0 p-5">
                   <div className="mb-2 flex items-center justify-between">
-                    <span className="text-xs font-medium text-muted-foreground">Log · secret đã được che</span>
-                    <span className="kbd">{active ? (polling ? 'polling' : 'live') : 'kết thúc'}</span>
+                    <span className="text-xs font-medium text-muted-foreground">Log · secrets masked</span>
+                    <span className="kbd">{active ? (polling ? 'polling' : 'live') : 'ended'}</span>
                   </div>
                   <div className="overflow-hidden rounded-lg border border-white/5 bg-[#0b0c0f]">
                     <div className="flex items-center gap-1.5 border-b border-white/5 px-3 py-2">
@@ -141,10 +145,10 @@ export default function BuildDetailPage() {
                       <span className="ml-2 font-mono text-[11px] text-zinc-500">{d.label}.log</span>
                     </div>
                     <div ref={logRef} className="h-[360px] overflow-y-auto px-4 py-3 font-mono text-xs leading-relaxed" aria-live="polite">
-                      {logs.length === 0 && <div className="text-zinc-500">{active ? 'Đang chờ log…' : 'Không có log.'}</div>}
+                      {logs.length === 0 && <div className="text-zinc-500">{active ? 'Waiting for logs…' : 'No logs.'}</div>}
                       {logs.map((l) => (
                         <div key={l.id} className="whitespace-pre-wrap break-words">
-                          <span className="text-zinc-600">{new Date(l.ts).toLocaleTimeString('vi-VN', { hour12: false })}</span>{' '}
+                          <span className="text-zinc-600">{new Date(l.ts).toLocaleTimeString('en-GB', { hour12: false })}</span>{' '}
                           <span className="text-zinc-500">[{l.stage}]</span>{' '}
                           <span className={logCls[l.level]}>{l.message}</span>
                         </div>
@@ -153,14 +157,14 @@ export default function BuildDetailPage() {
                   </div>
                 </div>
                 <div className="border-t p-5 xl:border-l xl:border-t-0">
-                  <div className="mb-3 text-xs font-medium text-muted-foreground">Chỉ số</div>
+                  <div className="mb-3 text-xs font-medium text-muted-foreground">Metrics</div>
                   <dl className="kv">
-                    <dt>Thời gian</dt><dd className="tabular-nums">{fmtDuration(duration)}</dd>
-                    <dt>Chi phí Codex</dt><dd className="tabular-nums">{fmtUsd(d.costUsd)} <span className="text-muted-foreground">/ trần {fmtUsd(d.limits.maxCostUsd)}</span></dd>
+                    <dt>Duration</dt><dd className="tabular-nums">{fmtDuration(duration)}</dd>
+                    <dt>Codex cost</dt><dd className="tabular-nums">{fmtUsd(d.costUsd)} <span className="text-muted-foreground">/ cap {fmtUsd(d.limits.maxCostUsd)}</span></dd>
                     <dt>Token</dt><dd className="text-xs tabular-nums">in {fmtNum(d.tokens.input)} · cache {fmtNum(d.tokens.cachedInput)} · out {fmtNum(d.tokens.output)}</dd>
-                    <dt>Vòng tự sửa build</dt><dd>{d.repairRounds} / {d.limits.maxRepairRounds}</dd>
-                    <dt>Vòng tự sửa theo QA</dt><dd>{d.qaRepairRounds ?? 0} / {d.limits.maxQaRepairRounds ?? 0}</dd>
-                    <dt>Timeout</dt><dd>{d.limits.timeoutMin} phút</dd>
+                    <dt>Build repair rounds</dt><dd>{d.repairRounds} / {d.limits.maxRepairRounds}</dd>
+                    <dt>QA repair rounds</dt><dd>{d.qaRepairRounds ?? 0} / {d.limits.maxQaRepairRounds ?? 0}</dd>
+                    <dt>Timeout</dt><dd>{d.limits.timeoutMin} min</dd>
                   </dl>
                   <div className="mb-3 mt-6 text-xs font-medium text-muted-foreground">Generation profile</div>
                   {d.generation ? (
@@ -168,13 +172,13 @@ export default function BuildDetailPage() {
                       <EffectiveGenerationSummary g={d.generation} />
                       {d.generation.rules.trim() && (
                         <details className="mt-3 rounded-md border px-3 py-2">
-                          <summary className="cursor-pointer text-xs font-medium">AGENTS.md của build</summary>
+                          <summary className="cursor-pointer text-xs font-medium">Build AGENTS.md</summary>
                           <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap font-mono text-xs text-muted-foreground">{d.generation.rules}</pre>
                         </details>
                       )}
                     </>
                   ) : (
-                    <p className="text-sm text-muted-foreground">{d.kind === 'qa' && d.sourceBuildLabel ? `Dùng lại code của ${d.sourceBuildLabel}` : 'Không có thông tin (build cũ)'}</p>
+                    <p className="text-sm text-muted-foreground">{d.kind === 'qa' && d.sourceBuildLabel ? `Reuses the code of ${d.sourceBuildLabel}` : 'No information (older build)'}</p>
                   )}
                   {Object.keys(d.provenance).length > 0 && <>
                     <div className="mb-3 mt-6 text-xs font-medium text-muted-foreground">Provenance</div>
@@ -187,9 +191,9 @@ export default function BuildDetailPage() {
             </Card>
 
             <Card className="mt-4">
-              <CardHeader title="Artifacts" description="Package, QA report và provenance kèm checksum" />
+              <CardHeader title="Artifacts" description="Package, QA report and provenance with checksums" />
               <div className="space-y-2 px-5 pb-5">
-                {d.artifacts.length === 0 && <p className="text-sm text-muted-foreground">{active ? 'Artifact sẽ có sau bước Package.' : 'Build này không tạo artifact.'}</p>}
+                {d.artifacts.length === 0 && <p className="text-sm text-muted-foreground">{active ? 'Artifacts appear after the Package stage.' : 'This build produced no artifacts.'}</p>}
                 {d.artifacts.map((a) => {
                   const Icon = artifactIcon[a.kind] ?? Package;
                   return (
@@ -199,7 +203,7 @@ export default function BuildDetailPage() {
                         <div className="truncate text-sm font-medium">{a.filename}</div>
                         <div className="truncate font-mono text-[11px] text-muted-foreground" title={a.sha256}>sha256:{shortHash(a.sha256)} · {fmtBytes(a.size)}</div>
                       </div>
-                      <a className="btn btn-outline btn-sm" href={absUrl(a.downloadUrl)} download><Download className="size-3.5" />Tải</a>
+                      <a className="btn btn-outline btn-sm" href={absUrl(a.downloadUrl)} download><Download className="size-3.5" />Download</a>
                     </div>
                   );
                 })}

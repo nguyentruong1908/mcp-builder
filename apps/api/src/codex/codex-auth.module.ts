@@ -42,7 +42,7 @@ export async function codexSandboxError(): Promise<string | null> {
   ensureHome();
   const r = await run(process.execPath, [codexJs(), 'sandbox', '--', 'true'], { cwd: codexHome, env: codexEnv(), timeoutMs: 20_000 }).catch((e: Error) => ({ code: 1, stdout: '', stderr: e.message, timedOut: false }));
   const msg = strip(r.stderr || r.stdout).trim().split('\n')[0] ?? '';
-  const error = r.code === 0 ? null : `${msg.slice(0, 240)} (xem mục "Codex sandbox trong Docker" ở README)`;
+  const error = r.code === 0 ? null : `${msg.slice(0, 240)} (see "Codex sandbox in Docker" in the README)`;
   sandboxCache = { at: Date.now(), error };
   return error;
 }
@@ -82,7 +82,7 @@ function writeAuthAtomically(content: string) {
 const authJsonSchema = z.object({
   OPENAI_API_KEY: z.string().nullable().optional(),
   tokens: z.object({ access_token: z.string().min(10), refresh_token: z.string().min(10), id_token: z.string().optional(), account_id: z.string().optional() }).passthrough().nullable().optional(),
-}).passthrough().refine((a) => !!a.OPENAI_API_KEY || !!a.tokens?.access_token, 'auth.json phải có tokens (đăng nhập ChatGPT) hoặc OPENAI_API_KEY');
+}).passthrough().refine((a) => !!a.OPENAI_API_KEY || !!a.tokens?.access_token, 'auth.json must contain tokens (ChatGPT sign-in) or OPENAI_API_KEY');
 
 @Controller('codex/auth')
 export class CodexAuthController {
@@ -114,7 +114,7 @@ export class CodexAuthController {
   async upload(@Body() body: unknown): Promise<CodexAuthStatus> {
     const { content } = parse(z.object({ content: z.string().min(2).max(64 * 1024) }).strict(), body);
     let json: unknown;
-    try { json = JSON.parse(content); } catch { throw new BadRequestException('File không phải JSON hợp lệ'); }
+    try { json = JSON.parse(content); } catch { throw new BadRequestException('The file is not valid JSON'); }
     parse(authJsonSchema, json);
     writeAuthAtomically(JSON.stringify(json, null, 2));
     await this.audit.log('codex.auth.upload', 'auth.json');
@@ -123,17 +123,17 @@ export class CodexAuthController {
 
   @Post('api-key')
   async apiKey(@Body() body: unknown): Promise<CodexAuthStatus> {
-    const { apiKey } = parse(z.object({ apiKey: z.string().trim().regex(/^sk-[A-Za-z0-9_-]{20,}$/, 'API key không đúng định dạng (sk-...)') }).strict(), body);
+    const { apiKey } = parse(z.object({ apiKey: z.string().trim().regex(/^sk-[A-Za-z0-9_-]{20,}$/, 'Invalid API key format (sk-...)') }).strict(), body);
     ensureHome();
     const r = await run(process.execPath, [codexJs(), 'login', '--with-api-key'], { cwd: codexHome, env: codexEnv(), input: apiKey + '\n', timeoutMs: 30_000 });
-    if (r.code !== 0) throw new BadRequestException(`codex login thất bại: ${strip(r.stderr || r.stdout).slice(0, 300)}`);
+    if (r.code !== 0) throw new BadRequestException(`codex login failed: ${strip(r.stderr || r.stdout).slice(0, 300)}`);
     await this.audit.log('codex.auth.api_key', 'auth.json');
     return this.status();
   }
 
   @Post('device')
   async startDevice(): Promise<CodexAuthStatus> {
-    if (device.state === 'pending') throw new ConflictException('Đang có một phiên đăng nhập chờ xác nhận');
+    if (device.state === 'pending') throw new ConflictException('A sign-in is already waiting for confirmation');
     ensureHome();
     const child = spawn(process.execPath, [codexJs(), 'login', '--device-auth'], { cwd: codexHome, env: codexEnv(), stdio: ['ignore', 'pipe', 'pipe'] });
     device = { state: 'pending', url: null, code: null, expiresAt: new Date(Date.now() + 15 * 60_000).toISOString(), error: null, child };

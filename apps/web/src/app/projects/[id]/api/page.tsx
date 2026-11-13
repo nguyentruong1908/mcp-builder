@@ -12,7 +12,7 @@ import { SpecDiffView } from '@/components/spec-diff';
 import { useToast } from '@/components/toast';
 
 type Tab = 'swagger' | 'context' | 'glossary' | 'conflicts';
-const IMPACT_PRESETS = ['Đọc dữ liệu', 'Ghi dữ liệu', 'Duyệt chứng từ', 'Gửi email', 'Xóa dữ liệu'];
+const IMPACT_PRESETS = ['Read data', 'Write data', 'Approve documents', 'Send email', 'Delete data'];
 
 export default function ApiContextPage() {
   const { id } = useParams<{ id: string }>();
@@ -22,12 +22,12 @@ export default function ApiContextPage() {
 
   return (
     <>
-      <PageHeader title="API & Context" description="Đặc tả và ngữ cảnh là dữ liệu đầu vào cho generation và QA. Chúng không làm thay đổi quyền của worker." />
+      <PageHeader title="API & Context" description="The spec and context are inputs to generation and QA. They never change the worker's permissions." />
       <Tabs className="mb-6" value={tab} onChange={setTab} tabs={[
         { id: 'swagger', label: 'Swagger snapshot' },
-        { id: 'context', label: 'Context có cấu trúc' },
+        { id: 'context', label: 'Structured context' },
         { id: 'glossary', label: 'Glossary' },
-        { id: 'conflicts', label: <>Mâu thuẫn{!!conflicts.data?.length && <span className="badge badge-warning ml-1.5">{conflicts.data.length}</span>}</> },
+        { id: 'conflicts', label: <>Conflicts{!!conflicts.data?.length && <span className="badge badge-warning ml-1.5">{conflicts.data.length}</span>}</> },
       ]} />
       {tab === 'swagger' && <SwaggerTab projectId={id} onImported={conflicts.refetch} />}
       {tab === 'context' && <ContextTab ctx={ctx} />}
@@ -35,7 +35,7 @@ export default function ApiContextPage() {
       {tab === 'conflicts' && (
         <Loaded q={conflicts}>
           {(list) => list.length === 0 ? (
-            <Card><EmptyState icon={<CircleCheck className="size-5 text-success" />} title="Không phát hiện mâu thuẫn" description="Hệ thống so glossary và context với spec hiện tại. Không tự đoán endpoint hay quy tắc chưa được cung cấp." /></Card>
+            <Card><EmptyState icon={<CircleCheck className="size-5 text-success" />} title="No conflicts found" description="The glossary and context are checked against the current spec. Endpoints and rules that were not provided are never guessed." /></Card>
           ) : (
             <div className="space-y-3">
               {list.map((c) => (
@@ -69,7 +69,7 @@ function SwaggerTab({ projectId, onImported }: { projectId: string; onImported: 
     setBusy(true); setErr(null);
     try {
       const snap = await api.importSpec(projectId, input);
-      toast(`Đã import ${snap.title || 'spec'} · ${snap.operationCount} operation`);
+      toast(`Imported ${snap.title || 'spec'} · ${snap.operationCount} operations`);
       q.refetch(); onImported();
     } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   }
@@ -77,7 +77,7 @@ function SwaggerTab({ projectId, onImported }: { projectId: string; onImported: 
     const f = e.target.files?.[0];
     e.target.value = '';
     if (!f) return;
-    if (f.size > 5 * 1024 * 1024) return setErr('File vượt quá 5MB.');
+    if (f.size > 5 * 1024 * 1024) return setErr('File exceeds 5MB.');
     await doImport({ content: await f.text(), filename: f.name });
   }
 
@@ -85,7 +85,7 @@ function SwaggerTab({ projectId, onImported }: { projectId: string; onImported: 
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_340px]">
       <div className="space-y-4">
         <Card>
-          <CardHeader title="Nguồn đặc tả" description="OpenAPI 3.0.x · JSON hoặc YAML" />
+          <CardHeader title="Spec source" description="OpenAPI 3.0.x · JSON or YAML" />
           <div className="px-5 pb-5">
             <form className="flex flex-col gap-2 sm:flex-row" onSubmit={(e) => { e.preventDefault(); if (url.trim()) doImport({ url: url.trim() }); }}>
               <div className="relative flex-1">
@@ -96,27 +96,27 @@ function SwaggerTab({ projectId, onImported }: { projectId: string; onImported: 
             </form>
             <label className={cn('mt-3 flex flex-col items-center justify-center gap-1 rounded-lg border border-dashed py-6 text-center transition-colors hover:bg-muted/40', busy ? 'pointer-events-none opacity-60' : 'cursor-pointer')}>
               <UploadCloud className="size-5 text-muted-foreground" />
-              <span className="text-sm font-medium">Bấm để upload file spec</span>
-              <span className="text-xs text-muted-foreground">.json, .yaml, .yml · tối đa 5MB</span>
+              <span className="text-sm font-medium">Click to upload a spec file</span>
+              <span className="text-xs text-muted-foreground">.json, .yaml, .yml · up to 5MB</span>
               <input type="file" className="sr-only" accept=".json,.yaml,.yml" onChange={onFile} disabled={busy} />
             </label>
-            <p className="hint flex items-center gap-1.5"><Shield className="size-3.5" />Fetch URL chỉ tới domain trong allowlist của server; <code className="mono">$ref</code> ngoài file không được resolve.</p>
+            <p className="hint flex items-center gap-1.5"><Shield className="size-3.5" />URL fetches are limited to the server allowlist; external <code className="mono">$ref</code>s are never resolved.</p>
             <div className="mt-3"><InlineError error={err} /></div>
           </div>
         </Card>
 
         <Loaded q={q}>
           {(s) => !s.current ? (
-            <Card><EmptyState icon={<FileCode2 className="size-5" />} title="Chưa có spec" description="Import Swagger/OpenAPI bằng URL hoặc file để hệ thống liệt kê endpoint." /></Card>
+            <Card><EmptyState icon={<FileCode2 className="size-5" />} title="No spec yet" description="Import Swagger/OpenAPI from a URL or file to list its endpoints." /></Card>
           ) : (
             <Card className="overflow-hidden">
-              <CardHeader title="Kết quả kiểm tra đầu vào" description="Phần không hỗ trợ chỉ bị loại khi người dùng xác nhận phạm vi trong Tool designer" />
+              <CardHeader title="Input validation" description="Unsupported parts are only excluded once you confirm the scope in the Tool designer" />
               <div className="grid grid-cols-2 border-y sm:grid-cols-4">
                 {[
                   ['Operations', s.current.operationCount, ''],
-                  ['Hỗ trợ', s.current.supportedCount, 'text-success'],
-                  ['Cảnh báo', s.current.issues.filter((i) => i.level === 'warning').length, 'text-warning'],
-                  ['Không hỗ trợ / lỗi', s.current.issues.filter((i) => i.level !== 'warning').length, 'text-danger'],
+                  ['Supported', s.current.supportedCount, 'text-success'],
+                  ['Warnings', s.current.issues.filter((i) => i.level === 'warning').length, 'text-warning'],
+                  ['Unsupported / errors', s.current.issues.filter((i) => i.level !== 'warning').length, 'text-danger'],
                 ].map(([label, n, cls], i) => (
                   <div key={String(label)} className={cn('p-4', i > 0 && 'border-l')}>
                     <div className="text-xs text-muted-foreground">{label}</div>
@@ -124,14 +124,14 @@ function SwaggerTab({ projectId, onImported }: { projectId: string; onImported: 
                   </div>
                 ))}
               </div>
-              {s.current.issues.length === 0 ? <p className="px-5 py-4 text-sm text-muted-foreground">Không có cảnh báo.</p> : (
+              {s.current.issues.length === 0 ? <p className="px-5 py-4 text-sm text-muted-foreground">No warnings.</p> : (
                 <div className="overflow-x-auto">
                   <table className="tbl">
-                    <thead><tr><th>Mức</th><th>Operation</th><th>Vấn đề</th></tr></thead>
+                    <thead><tr><th>Level</th><th>Operation</th><th>Issue</th></tr></thead>
                     <tbody>
                       {s.current.issues.map((r, i) => (
                         <tr key={i}>
-                          <td><Badge tone={r.level === 'warning' ? 'warning' : 'danger'}>{r.level === 'warning' ? 'Cảnh báo' : r.level === 'unsupported' ? 'Không hỗ trợ' : 'Lỗi'}</Badge></td>
+                          <td><Badge tone={r.level === 'warning' ? 'warning' : 'danger'}>{r.level === 'warning' ? 'Warning' : r.level === 'unsupported' ? 'Unsupported' : 'Error'}</Badge></td>
                           <td className="mono whitespace-nowrap">{r.operation ?? '—'}</td>
                           <td className="text-muted-foreground">{r.message}</td>
                         </tr>
@@ -146,8 +146,8 @@ function SwaggerTab({ projectId, onImported }: { projectId: string; onImported: 
 
         {diffPair && (
           <Card>
-            <CardHeader title="So sánh snapshot" description={<span className="mono">{shortHash(diffPair[0])} → {shortHash(diffPair[1])}</span>}
-              actions={<button className="btn btn-ghost btn-sm" onClick={() => setDiffPair(null)}>Đóng</button>} />
+            <CardHeader title="Snapshot comparison" description={<span className="mono">{shortHash(diffPair[0])} → {shortHash(diffPair[1])}</span>}
+              actions={<button className="btn btn-ghost btn-sm" onClick={() => setDiffPair(null)}>Close</button>} />
             <div className="px-5 pb-5"><SpecDiffView projectId={projectId} from={diffPair[0]} to={diffPair[1]} /></div>
           </Card>
         )}
@@ -158,16 +158,16 @@ function SwaggerTab({ projectId, onImported }: { projectId: string; onImported: 
           <Card className="h-fit">
             <CardHeader title="Snapshot" actions={<Badge tone="success">OAS {s.current.oasVersion}</Badge>} />
             <dl className="kv px-5 pb-5">
-              <dt>Tiêu đề</dt><dd>{s.current.title || '—'}</dd>
+              <dt>Title</dt><dd>{s.current.title || '—'}</dd>
               <dt>API version</dt><dd>{s.current.apiVersion || '—'}</dd>
               <dt>SHA-256</dt><dd className="mono" title={s.current.sha256}>{shortHash(s.current.sha256)}</dd>
               <dt>Import</dt><dd>{fmtDate(s.current.createdAt)}</dd>
-              <dt>Nguồn</dt><dd className="mono break-all text-xs">{s.current.sourceUrl ?? s.current.filename ?? '—'}</dd>
+              <dt>Source</dt><dd className="mono break-all text-xs">{s.current.sourceUrl ?? s.current.filename ?? '—'}</dd>
               <dt>Security</dt><dd>{s.current.securitySchemes.join(' · ') || '—'}</dd>
               <dt>Servers</dt><dd className="mono break-all text-xs">{s.current.servers.join(', ') || '—'}</dd>
             </dl>
             <div className="border-t px-5 py-4">
-              <div className="mb-2 text-xs font-medium text-muted-foreground">Lịch sử</div>
+              <div className="mb-2 text-xs font-medium text-muted-foreground">History</div>
               <HistoryList history={s.history} currentId={s.current.id} onDiff={setDiffPair} />
             </div>
           </Card>
@@ -190,13 +190,13 @@ function HistoryList({ history, currentId, onDiff }: { history: { id: string; sh
       <div className="space-y-1.5 text-sm">
         {sorted.map((h) => (
           <label key={h.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 hover:bg-muted/40">
-            <input type="checkbox" className="size-4 accent-[var(--brand)]" checked={pick.includes(h.id)} onChange={() => toggle(h.id)} aria-label={`Chọn snapshot ${shortHash(h.sha256)}`} />
+            <input type="checkbox" className="size-4 accent-[var(--brand)]" checked={pick.includes(h.id)} onChange={() => toggle(h.id)} aria-label={`Select snapshot ${shortHash(h.sha256)}`} />
             <span className={cn('mono flex-1', h.id !== currentId && 'text-muted-foreground')}>{shortHash(h.sha256)}</span>
-            {h.id === currentId ? <Badge tone="brand">hiện tại</Badge> : <span className="text-xs text-muted-foreground">{fmtDate(h.createdAt)}</span>}
+            {h.id === currentId ? <Badge tone="brand">current</Badge> : <span className="text-xs text-muted-foreground">{fmtDate(h.createdAt)}</span>}
           </label>
         ))}
       </div>
-      <button className="btn btn-outline btn-sm mt-3 w-full" disabled={pick.length !== 2} onClick={compare}>So sánh 2 snapshot đã chọn</button>
+      <button className="btn btn-outline btn-sm mt-3 w-full" disabled={pick.length !== 2} onClick={compare}>Compare the 2 selected snapshots</button>
     </>
   );
 }
@@ -218,7 +218,7 @@ function useContextForm(projectId: string, onSaved: () => void) {
     setBusy(true); setErr(null);
     try {
       const saved: ContextDto = await api.saveContext(projectId, { ...form, glossary: form.glossary.filter((g) => g.term.trim()) });
-      q.setData(saved); toast('Đã lưu context'); onSaved();
+      q.setData(saved); toast('Context saved'); onSaved();
     } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   }
   const set = <K extends keyof UpdateContextInput>(k: K, v: UpdateContextInput[K]) => setForm((f) => (f ? { ...f, [k]: v } : f));
@@ -229,8 +229,8 @@ function SaveBar({ ctx }: { ctx: CtxForm }) {
   return (
     <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
       <div className="flex-1"><InlineError error={ctx.err} /></div>
-      {ctx.updatedAt && <span className="text-xs text-muted-foreground">Lưu lần cuối {fmtDate(ctx.updatedAt)}</span>}
-      <button className="btn btn-primary" disabled={ctx.busy || !ctx.form} onClick={ctx.save}>{ctx.busy && <Spinner />}Lưu context</button>
+      {ctx.updatedAt && <span className="text-xs text-muted-foreground">Last saved {fmtDate(ctx.updatedAt)}</span>}
+      <button className="btn btn-primary" disabled={ctx.busy || !ctx.form} onClick={ctx.save}>{ctx.busy && <Spinner />}Save context</button>
     </div>
   );
 }
@@ -252,16 +252,16 @@ function ContextTab({ ctx }: { ctx: CtxForm }) {
           <>
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <Card className="space-y-4 p-5">
-                {area('purpose', 'Mục đích', undefined, 'Cho agent tra cứu và tạo đơn bán hàng…')}
-                {area('sampleTasks', 'Tác vụ mẫu', 'Mỗi dòng là một tác vụ, dùng cho Agent task evaluation (Codex làm thử bằng MCP tool). Thêm "=> tên_tool" ở cuối dòng để chấm cả việc chọn đúng tool.', '- Tra các đơn Draft của khách C0042 => search_sales_orders', true)}
-                {area('businessRules', 'Điều kiện nghiệp vụ', undefined, 'Chỉ đơn ở trạng thái Draft được chỉnh sửa.')}
-                {line('expectedResults', 'Kỳ vọng kết quả', undefined, 'Sau khi tạo đơn trả mã đơn và trạng thái.')}
+                {area('purpose', 'Purpose', undefined, 'Let agents look up and create sales orders…')}
+                {area('sampleTasks', 'Sample tasks', 'One task per line, used by agent task evaluation (Codex tries them with the MCP tools). Append "=> tool_name" to also score tool selection.', '- List the Draft orders of customer C0042 => search_sales_orders', true)}
+                {area('businessRules', 'Business rules', undefined, 'Only orders in Draft status can be edited.')}
+                {line('expectedResults', 'Expected results', undefined, 'After creating an order, return its ID and status.')}
               </Card>
               <Card className="space-y-4 p-5">
-                {line('dataFormats', 'Định dạng dữ liệu', undefined, 'VND số nguyên · Asia/Ho_Chi_Minh')}
-                {line('accessScope', 'Phạm vi truy cập', 'Mô tả quyền không có nghĩa là quyền đã được thực thi. Kiểm soát quyền vẫn nằm ở runtime và hệ thống đích.')}
+                {line('dataFormats', 'Data formats', undefined, 'Amounts in integer VND · Asia/Ho_Chi_Minh')}
+                {line('accessScope', 'Access scope', 'Describing permissions does not enforce them. Access control stays in the runtime and the target system.')}
                 <div>
-                  <div className="label">Tác động</div>
+                  <div className="label">Impact</div>
                   <div className="flex flex-wrap gap-2">
                     {impacts.map((t) => {
                       const on = f.impacts.includes(t);
@@ -274,8 +274,8 @@ function ContextTab({ ctx }: { ctx: CtxForm }) {
                     })}
                   </div>
                 </div>
-                {area('freeform', 'Mô tả tự do')}
-                <div className="alert alert-info"><Info className="mt-0.5 size-4 shrink-0 text-info" /><div>Hệ thống không tự đoán endpoint, trường dữ liệu hay quy tắc chưa được cung cấp. Chỗ còn thiếu sẽ được báo trong tab Mâu thuẫn.</div></div>
+                {area('freeform', 'Free-form notes')}
+                <div className="alert alert-info"><Info className="mt-0.5 size-4 shrink-0 text-info" /><div>Endpoints, fields and rules that were not provided are never guessed. Gaps are reported in the Conflicts tab.</div></div>
               </Card>
             </div>
             <SaveBar ctx={ctx} />
@@ -297,20 +297,20 @@ function GlossaryTab({ ctx }: { ctx: CtxForm }) {
         return (
           <>
             <Card className="overflow-hidden">
-              <CardHeader title="Thuật ngữ" description="Ánh xạ thuật ngữ nghiệp vụ sang trường trong spec" actions={
-                <button className="btn btn-outline btn-sm" onClick={() => ctx.set('glossary', [...rows, { term: '', meaning: '', mapping: '' }])}><Plus className="size-3.5" />Thêm</button>
+              <CardHeader title="Glossary" description="Map business terms to fields in the spec" actions={
+                <button className="btn btn-outline btn-sm" onClick={() => ctx.set('glossary', [...rows, { term: '', meaning: '', mapping: '' }])}><Plus className="size-3.5" />Add</button>
               } />
-              {rows.length === 0 ? <EmptyState title="Chưa có thuật ngữ" description="VD: customerCode là mã khách ERP, khác id nội bộ." /> : (
+              {rows.length === 0 ? <EmptyState title="No terms yet" description="E.g. customerCode is the ERP customer code, not the internal id." /> : (
                 <div className="overflow-x-auto">
                   <table className="tbl">
-                    <thead><tr><th>Thuật ngữ</th><th>Nghĩa</th><th>Ánh xạ trong spec</th><th className="w-12"><span className="sr-only">Xóa</span></th></tr></thead>
+                    <thead><tr><th>Term</th><th>Meaning</th><th>Spec mapping</th><th className="w-12"><span className="sr-only">Delete</span></th></tr></thead>
                     <tbody>
                       {rows.map((r, i) => (
                         <tr key={i}>
-                          <td><input className="input h-8 font-mono text-xs" value={r.term} onChange={(e) => update(i, 'term', e.target.value)} aria-label="Thuật ngữ" /></td>
-                          <td><input className="input h-8" value={r.meaning} onChange={(e) => update(i, 'meaning', e.target.value)} aria-label="Nghĩa" /></td>
-                          <td><input className="input h-8 font-mono text-xs" value={r.mapping} placeholder="Customer.code · ?customer" onChange={(e) => update(i, 'mapping', e.target.value)} aria-label="Ánh xạ trong spec" /></td>
-                          <td><button className="btn btn-ghost btn-icon size-8" aria-label="Xóa thuật ngữ" onClick={() => ctx.set('glossary', rows.filter((_, j) => j !== i))}><Trash2 className="size-4" /></button></td>
+                          <td><input className="input h-8 font-mono text-xs" value={r.term} onChange={(e) => update(i, 'term', e.target.value)} aria-label="Term" /></td>
+                          <td><input className="input h-8" value={r.meaning} onChange={(e) => update(i, 'meaning', e.target.value)} aria-label="Meaning" /></td>
+                          <td><input className="input h-8 font-mono text-xs" value={r.mapping} placeholder="Customer.code · ?customer" onChange={(e) => update(i, 'mapping', e.target.value)} aria-label="Spec mapping" /></td>
+                          <td><button className="btn btn-ghost btn-icon size-8" aria-label="Delete term" onClick={() => ctx.set('glossary', rows.filter((_, j) => j !== i))}><Trash2 className="size-4" /></button></td>
                         </tr>
                       ))}
                     </tbody>

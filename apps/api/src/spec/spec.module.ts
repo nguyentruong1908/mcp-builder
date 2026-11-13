@@ -15,10 +15,10 @@ const importSchema = z.object({
   url: z.string().url().optional(),
   content: z.string().max(MAX_SPEC_BYTES).optional(),
   filename: z.string().max(200).optional(),
-}).refine((v) => !!v.url !== !!v.content, 'Cần đúng một trong hai: url hoặc content');
+}).refine((v) => !!v.url !== !!v.content, 'Provide exactly one of url or content');
 
 const toolPatchSchema = z.object({
-  name: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/, 'Tên tool chỉ gồm chữ, số, _ hoặc -, tối đa 64 ký tự').optional(),
+  name: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/, 'Tool names may only contain letters, digits, _ or -, up to 64 characters').optional(),
   description: z.string().max(4000).optional(),
   impact: z.enum(['read', 'write', 'side_effect', 'destructive']).optional(),
   requireConfirm: z.boolean().optional(),
@@ -28,20 +28,20 @@ const toolPatchSchema = z.object({
 /** Fetches a spec URL with an SSRF guard: allowlisted hosts only, no redirects, size and time limits. */
 async function fetchSpec(rawUrl: string): Promise<string> {
   const url = new URL(rawUrl);
-  if (!['http:', 'https:'].includes(url.protocol)) throw new BadRequestException('Chỉ hỗ trợ URL http/https');
+  if (!['http:', 'https:'].includes(url.protocol)) throw new BadRequestException('Only http/https URLs are supported');
   if (!config.specFetchAllowlist.includes(url.hostname.toLowerCase())) {
-    throw new BadRequestException(`Host "${url.hostname}" không nằm trong SPEC_FETCH_ALLOWLIST. Hãy upload file hoặc nhờ admin thêm host.`);
+    throw new BadRequestException(`Host "${url.hostname}" is not in SPEC_FETCH_ALLOWLIST. Upload the file instead or ask an admin to allow the host.`);
   }
   let res: Response;
   try {
     res = await fetch(url, { redirect: 'error', signal: AbortSignal.timeout(10_000), headers: { accept: 'application/json, application/yaml, text/yaml, */*' } });
   } catch (err) {
-    throw new BadRequestException(`Không tải được spec: ${(err as Error).message}`);
+    throw new BadRequestException(`Cannot download the spec: ${(err as Error).message}`);
   }
-  if (!res.ok) throw new BadRequestException(`Tải spec thất bại: HTTP ${res.status}`);
-  if (Number(res.headers.get('content-length') ?? 0) > MAX_SPEC_BYTES) throw new BadRequestException('Spec vượt quá 5MB');
+  if (!res.ok) throw new BadRequestException(`Spec download failed: HTTP ${res.status}`);
+  if (Number(res.headers.get('content-length') ?? 0) > MAX_SPEC_BYTES) throw new BadRequestException('Spec exceeds 5MB');
   const text = await res.text();
-  if (text.length > MAX_SPEC_BYTES) throw new BadRequestException('Spec vượt quá 5MB');
+  if (text.length > MAX_SPEC_BYTES) throw new BadRequestException('Spec exceeds 5MB');
   return text;
 }
 
@@ -51,7 +51,7 @@ export class SpecService {
 
   async import(projectId: string, body: unknown) {
     const input = parse(importSchema, body);
-    await this.prisma.project.findUniqueOrThrow({ where: { id: projectId } }).catch(() => { throw new NotFoundException('Project không tồn tại'); });
+    await this.prisma.project.findUniqueOrThrow({ where: { id: projectId } }).catch(() => { throw new NotFoundException('Project not found'); });
     const raw = input.url ? await fetchSpec(input.url) : input.content!;
     let processed;
     try {
@@ -133,12 +133,12 @@ export class SpecService {
     const snaps = await this.prisma.specSnapshot.findMany({ where: { projectId }, orderBy: { createdAt: 'desc' }, take: 2, select: { id: true } });
     const to = toId ?? snaps[0]?.id;
     const from = fromId ?? snaps[1]?.id;
-    if (!to || !from) throw new BadRequestException('Cần ít nhất hai snapshot để so sánh');
+    if (!to || !from) throw new BadRequestException('At least two snapshots are needed for a diff');
     const [a, b] = await Promise.all([
       this.prisma.specSnapshot.findFirst({ where: { id: from, projectId } }),
       this.prisma.specSnapshot.findFirst({ where: { id: to, projectId } }),
     ]);
-    if (!a || !b) throw new NotFoundException('Snapshot không tồn tại');
+    if (!a || !b) throw new NotFoundException('Snapshot not found');
     const tools = await this.prisma.toolDefinition.findMany({ where: { projectId, selected: true }, select: { method: true, path: true, name: true } });
     const names = new Map(tools.map((t) => [`${t.method} ${t.path}`, t.name]));
     return diffOperations(a.operations as unknown as NormalizedOperation[], b.operations as unknown as NormalizedOperation[], a.id, b.id, names);
@@ -163,11 +163,11 @@ export class SpecController {
   async updateTool(@Param('id') id: string, @Body() body: unknown): Promise<ToolDto> {
     const patch = parse(toolPatchSchema, body);
     const tool = await this.prisma.toolDefinition.findUnique({ where: { id } });
-    if (!tool) throw new NotFoundException('Tool không tồn tại');
-    if (patch.selected && tool.unsupportedReason) throw new BadRequestException(`Không thể chọn: ${tool.unsupportedReason}`);
+    if (!tool) throw new NotFoundException('Tool not found');
+    if (patch.selected && tool.unsupportedReason) throw new BadRequestException(`Cannot select: ${tool.unsupportedReason}`);
     if (patch.name && patch.name !== tool.name) {
       const clash = await this.prisma.toolDefinition.findFirst({ where: { projectId: tool.projectId, name: patch.name, present: true, NOT: { id } } });
-      if (clash) throw new BadRequestException(`Tên "${patch.name}" đã được dùng cho ${clash.method} ${clash.path}`);
+      if (clash) throw new BadRequestException(`Name "${patch.name}" is already used by ${clash.method} ${clash.path}`);
     }
     return toToolDto(await this.prisma.toolDefinition.update({ where: { id }, data: patch }));
   }

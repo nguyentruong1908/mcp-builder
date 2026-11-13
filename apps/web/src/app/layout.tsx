@@ -10,7 +10,7 @@ const mono = JetBrains_Mono({ variable: '--font-jetbrains', subsets: ['latin', '
 
 export const metadata: Metadata = {
   title: { default: 'MCP Factory', template: '%s · MCP Factory' },
-  description: 'Biến API hiện có thành MCP server và CLI cho AI agents.',
+  description: 'Turn existing APIs into MCP servers and CLIs for AI agents.',
 };
 
 // Runs before first paint so the stored theme never flashes.
@@ -18,7 +18,7 @@ const themeScript = `try{if(localStorage.getItem('mf-theme')==='light')document.
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
-    <html lang="vi" className={`${plex.variable} ${mono.variable} dark`} suppressHydrationWarning>
+    <html lang="en" className={`${plex.variable} ${mono.variable} dark`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>

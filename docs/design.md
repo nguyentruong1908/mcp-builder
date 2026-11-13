@@ -1,126 +1,134 @@
-# MCP Factory: Thiết kế kỹ thuật v0.1
+# MCP Factory: Technical Design
 
-Tài liệu này mô tả cách triển khai MVP theo product plan v0.1 và bản UI draft (`ui-draft/index.html`).
+This document describes how the MVP is built. The README covers goals, setup, and the roadmap.
 
-## 1. Quyết định đã chốt
+## 1. Decisions
 
-| Hạng mục | Lựa chọn |
+| Area | Choice |
 |---|---|
-| Frontend | Next.js 16 (App Router) + React 19 + Tailwind CSS 4, design token theo shadcn/ui, icon `lucide-react` |
-| Backend | NestJS + Prisma + PostgreSQL 16 |
-| Sinh code | `@openai/codex-sdk` chạy thật (không có mock), model đặt qua `CODEX_MODEL` |
-| Job queue | Bảng `Build` trong Postgres + worker trong tiến trình API, lấy job bằng `FOR UPDATE SKIP LOCKED` (không thêm Redis) |
-| Auth | Chưa có. Mọi thao tác ghi actor là `system` (hoặc header `x-actor` nếu có) |
-| Runtime đầu ra | Node.js 20+ / npm. Một template nền: MCP server (stdio) + CLI dùng chung `tools.json` |
+| Frontend | Next.js 16 (App Router), React 19, Tailwind CSS 4, shadcn/ui-style tokens, `lucide-react` icons |
+| Backend | NestJS 12 (ESM), Prisma 7 with the `pg` driver adapter, PostgreSQL 16 |
+| Code generation | `@openai/codex-sdk`, always real (no mock mode). Model and reasoning come from the generation profile |
+| Job queue | `Build` table in Postgres plus an in-process worker that claims jobs with `FOR UPDATE SKIP LOCKED` (no Redis) |
+| Auth | None yet. Every write is recorded with actor `system` |
+| Output runtime | Node.js 20+ / npm. One base template: MCP server (stdio + Streamable HTTP) and CLI sharing `factory/tools.json` |
 | Monorepo | pnpm workspace: `apps/web`, `apps/api`, `packages/shared`, `templates/mcp-node` |
+| Deployment | Docker Compose: `postgres`, `api`, `web`, `gateway` (Caddy, one origin for UI and `/api`) |
 
-## 2. Kiến trúc
+## 2. Architecture
 
 ```
-apps/web (Next.js :3000) ──REST/SSE──▶ apps/api (NestJS :4000) ──▶ PostgreSQL
-                                          │
-                                          ├─ SpecModule      parse/validate OpenAPI, snapshot, diff
-                                          ├─ ToolsModule     tool definition (dùng chung MCP/CLI)
-                                          ├─ BuildWorker     pipeline nền theo từng build
-                                          │    1. spec      chuẩn hóa đầu vào, chặn khi lỗi
-                                          │    2. codex     copy template → Codex SDK viết adapter/docs
-                                          │    3. build     npm install, tsc, secret scan (tự sửa ≤ N vòng)
-                                          │    4. qa        QA runner độc lập với code Codex sinh
-                                          │    5. package   npm pack, checksum, provenance, QA report
-                                          └─ data/        workspaces + artifacts (ngoài DB)
+apps/web (Next.js) ──REST/SSE──▶ apps/api (NestJS) ──▶ PostgreSQL
+                                     │
+                                     ├─ SpecModule         parse/validate OpenAPI, snapshots, diff, tool sync
+                                     ├─ ProjectsModule     projects, context, conflicts, dashboard, settings, audit
+                                     ├─ ConnectionsModule  QA environments, secret references, agent access level
+                                     ├─ TestCasesModule    custom tool / multi-step / agent test cases
+                                     ├─ GenerationModule   generation profiles, Codex model list and check
+                                     ├─ CodexAuthModule    Codex sign-in (device code, API key, auth.json)
+                                     └─ BuildsModule       export, QA runs, versions, artifacts, worker
+                                          1. spec      workspace from the template (or copied from a source build)
+                                          2. codex     Codex writes src/adapters/*.ts + README (skipped for QA runs)
+                                          3. build     npm install, tsc, secret scan (Codex repairs ≤ N rounds)
+                                          4. qa        independent QA runner, then QA-driven repair rounds
+                                          5. package   npm pack, sha256, provenance.json, qa-report.json
+data/ (outside the DB): build workspaces, artifacts, Codex home (auth.json)
 ```
 
-**Nguyên tắc từ plan được giữ trong code:**
-- Codex chỉ viết code trong workspace của build (`sandboxMode: workspace-write`, không có network). Swagger/context được đưa vào dưới dạng file dữ liệu, không ghép vào phần chỉ dẫn hệ thống.
-- QA runner nằm trong `apps/api`, do Factory viết, không dùng test của Codex để kết luận.
-- Thiếu môi trường hoặc credential thì kết quả là `not_run`/`blocked` kèm lý do, không bao giờ ghi thành `pass`.
-- Credential chỉ lưu dưới dạng tham chiếu (`env://VAR_NAME`), giá trị đọc từ biến môi trường của API lúc chạy QA, không ghi vào artifact hay log (log được che bằng `redact()`).
-- Fetch Swagger qua URL bị giới hạn bởi `SPEC_FETCH_ALLOWLIST`; `$ref` ngoài file bị chặn (chỉ resolve nội bộ).
+**Principles enforced in code (not only in prompts):**
+- Codex may only change `src/adapters/` and `README.md`. Any other change is reverted after each Codex turn. Spec and context reach Codex as data files, never as instructions.
+- The QA runner is written by the Factory and never relies on tests produced by Codex. A mock pass is never reported as an integration pass.
+- Missing environments or credentials produce `not_run` / `blocked` with a reason, never `pass`.
+- Credentials are stored only as references (`env://VAR_NAME`). Values are read from the API environment at run time and redacted from logs and evidence. Build subprocesses get a minimal environment.
+- Spec URLs are fetched only from `SPEC_FETCH_ALLOWLIST`; external `$ref`s are rejected.
+- Write tools are never called with generated sample data on a live API. They are verified through user-written live test cases.
 
-## 3. Mô hình dữ liệu (Prisma)
+## 3. Data model (Prisma)
 
-- `Project`: tên, slug, mô tả, owner, đầu ra (`outputs`), `archivedAt`.
-- `SpecSnapshot`: raw spec, sha256, OAS version, API version, danh sách operation, issues. Mỗi lần import tạo snapshot mới.
-- `ProjectContext` (1–1 với project): các trường context có cấu trúc + glossary (JSON).
-- `ToolDefinition`: mỗi operation của spec hiện tại là một dòng; `selected`, `name`, `description`, `impact` (read/write/side_effect/destructive), `requireConfirm`, `inputSchema`, `unsupportedReason`.
-- `Connection`: môi trường (dev/test/prod), base URL, kiểu auth, `secretRef`, `allowWrite`, `useForQa`.
-- `Version`: số semver, trạng thái (draft/released/deprecated), snapshot của spec/context/tools tại thời điểm export, changelog.
-- `Build`: seq (hiển thị `b-0001`), trạng thái, trạng thái từng stage, token usage, chi phí ước tính, số vòng tự sửa, nhãn Package/Integration verified, provenance, `cancelRequested`.
-- `BuildLog`, `QaResult` (layer × tool × status + evidence), `Artifact` (file, sha256, size), `AuditLog`, `Setting` (ngân sách, giới hạn).
+- `Project`: name, slug, description, owner, outputs, generation override, `archivedAt`.
+- `SpecSnapshot`: raw spec, sha256, OAS/API version, normalized operations, issues. One per import.
+- `ProjectContext`: structured context fields and glossary.
+- `ToolDefinition`: one row per operation: `selected`, `name`, `description`, `impact` (read / write / side_effect / destructive), `requireConfirm`, `inputSchema`, `bodyWhole`, `unsupportedReason`.
+- `Connection`: environment, base URL, auth type, `secretRef`, `allowWrite`, `agentAccess` (read_only / write / write_destructive), `useForQa`.
+- `TestCase`: `tool_call`, `tool_steps` (ordered steps with `{{stepN.path}}` placeholders and cleanup steps), or `agent_task`.
+- `Version`: semver, status (draft / released / deprecated), frozen spec, context and tools.
+- `Build`: `kind` (export / qa), source build for QA runs, stage states, token usage and cost, repair and QA repair rounds, verdicts, frozen tool snapshot and generation profile, provenance.
+- `BuildLog`, `QaResult` (layer × tool × status + evidence), `Artifact`, `AuditLog`, `Setting` (limits, workspace generation profile).
 
 ## 4. API (prefix `/api`)
 
-Kiểu dữ liệu trả về khai báo trong `packages/shared/src/index.ts`.
+Response types live in `packages/shared/src/index.ts`.
 
-| Method | Path | Mô tả |
+| Method | Path | Purpose |
 |---|---|---|
-| GET | `/dashboard` | Số liệu tổng, danh sách project, build đang chạy, hoạt động gần đây |
-| GET / POST | `/projects` | Danh sách / tạo project |
-| GET / PATCH | `/projects/:id` | Chi tiết (kèm tiến trình 9 bước) / cập nhật |
-| POST | `/projects/:id/archive` | Archive (không xóa) |
-| POST | `/projects/:id/spec` | Import spec: `{ url }` hoặc `{ content, filename }` |
-| GET | `/projects/:id/spec` | Snapshot hiện tại + lịch sử |
-| GET | `/projects/:id/spec/diff?from=&to=` | Diff giữa hai snapshot + tool bị ảnh hưởng |
-| GET / PUT | `/projects/:id/context` | Context có cấu trúc + glossary |
-| GET | `/projects/:id/conflicts` | Mâu thuẫn phát hiện được giữa context và spec |
+| GET | `/dashboard` | Totals, projects, running builds, recent activity, budget |
+| GET / POST | `/projects` | List / create projects |
+| GET / PATCH | `/projects/:id` | Detail (with 9-step progress) / update |
+| POST | `/projects/:id/archive` | Archive (never delete) |
+| POST | `/projects/:id/spec` | Import a spec: `{ url }` or `{ content, filename }` |
+| GET | `/projects/:id/spec` | Current snapshot and history |
+| GET | `/projects/:id/spec/diff?from=&to=` | Diff between snapshots and affected tools |
+| GET / PUT | `/projects/:id/context` | Structured context and glossary |
+| GET | `/projects/:id/conflicts` | Detected context/spec conflicts (heuristics) |
 | GET | `/projects/:id/tools` | Tool definitions |
-| PATCH | `/tools/:id` | Sửa tên, mô tả, impact, requireConfirm, selected |
-| GET / POST | `/projects/:id/connections` | Môi trường |
-| PATCH / DELETE | `/connections/:id` | Sửa / xóa môi trường |
-| POST | `/connections/:id/test` | Kiểm tra kết nối (GET base URL) |
-| GET | `/projects/:id/versions` | Danh sách version |
-| POST | `/versions/:id/release` | Release (chỉ khi build mới nhất đạt Package verified) |
-| POST | `/versions/:id/deprecate` | Deprecate |
-| POST | `/projects/:id/builds` | **Export**: chốt snapshot vào version nháp và xếp hàng build |
-| GET | `/projects/:id/builds` | Lịch sử build |
-| GET | `/builds/:id` | Chi tiết build + artifacts |
-| GET | `/builds/:id/logs?after=` | Log (đã che secret) |
-| GET | `/builds/:id/events` | SSE: log + thay đổi trạng thái |
-| POST | `/builds/:id/cancel` | Hủy |
-| GET | `/builds/:id/qa` | QA report: tổng hợp theo lớp, ma trận coverage, danh sách lỗi |
-| POST | `/builds/:id/qa-run` | QA run độc lập trên code của build đó (bỏ qua Codex), trả về build `kind: qa` |
-| GET / PUT | `/generation-profile` | Generation profile cấp workspace (model, reasoning, rules → AGENTS.md) |
-| GET / PUT / DELETE | `/projects/:id/generation` | Ghi đè profile cho project (DELETE = dùng lại profile workspace) |
-| GET | `/codex/models` | Model + mức reasoning từ cache của Codex |
-| POST | `/codex/models/check` | Kiểm tra tài khoản Codex dùng được model `{ model }` |
-| GET / POST | `/projects/:id/test-cases` | Test case tùy chỉnh (gọi tool hoặc tác vụ agent) |
-| PATCH / DELETE | `/test-cases/:id` | Sửa / xóa test case |
-| GET | `/artifacts/:id/download` | Tải artifact |
+| PATCH | `/tools/:id` | Rename, describe, set impact, confirmation, selection |
+| GET / POST | `/projects/:id/connections` | QA environments |
+| PATCH / DELETE | `/connections/:id` | Update (only the fields sent) / delete |
+| POST | `/connections/:id/test` | Connectivity check |
+| GET / POST | `/projects/:id/test-cases` | Custom test cases |
+| PATCH / DELETE | `/test-cases/:id` | Update / delete a test case |
+| GET / PUT | `/generation-profile` | Workspace generation profile (model, reasoning, rules → AGENTS.md) |
+| GET / PUT / DELETE | `/projects/:id/generation` | Project override (DELETE = use the workspace profile) |
+| GET | `/codex/models` | Models and reasoning levels from the Codex cache |
+| POST | `/codex/models/check` | Proves the account can use `{ model }` |
+| GET | `/codex/auth` | Codex sign-in status (never returns tokens) |
+| POST / DELETE | `/codex/auth/device` | Start / cancel device-code sign-in |
+| POST | `/codex/auth/api-key`, `/codex/auth/upload`, `/codex/auth/logout` | API key sign-in, auth.json upload, sign-out |
+| GET | `/projects/:id/versions` | Versions |
+| POST | `/versions/:id/release`, `/versions/:id/deprecate` | Release (latest build must be Package verified) / deprecate |
+| POST | `/projects/:id/builds` | **Export**: freeze spec/context/tools into the draft version and queue a build |
+| GET | `/projects/:id/builds` | Build history |
+| GET | `/builds/:id` | Build detail, artifacts, generation profile |
+| GET | `/builds/:id/logs?after=` | Redacted logs |
+| GET | `/builds/:id/events` | SSE: logs and state changes |
+| POST | `/builds/:id/cancel` | Cancel |
+| POST | `/builds/:id/qa-run` | Standalone QA run on that build's code (Codex generation skipped) |
+| GET | `/builds/:id/qa` | QA report: layers, coverage matrix, failures, results |
+| GET | `/artifacts/:id/download` | Download an artifact |
 | GET | `/audit` | Audit log |
-| GET / PUT | `/settings` | Ngân sách và giới hạn |
+| GET / PUT | `/settings` | Limits and budget |
 
-## 5. Pipeline build
+## 5. Build pipeline
 
-| Stage | Việc làm | Fail khi |
+| Stage | Work | Fails when |
 |---|---|---|
-| spec | Đọc snapshot của version, kiểm tra có ≥ 1 tool được chọn, không chọn operation không hỗ trợ | Không có tool, spec lỗi |
-| codex | Copy `templates/mcp-node` vào `data/builds/<id>/workspace`, ghi `factory/tools.json`, `factory/context.md`, `factory/openapi.json`; mở thread Codex viết `src/adapters/<tool>.ts` + `README.md` | Codex lỗi, vượt ngân sách token |
-| build | `npm install`, `npm run build` (tsc), secret scan. Lỗi thì gửi log lỗi lại cho cùng thread Codex, tối đa `maxRepairRounds` | Hết vòng sửa |
-| qa | Xem bảng dưới | Không fail stage; kết quả quyết định nhãn |
-| package | `npm pack`, sha256, `provenance.json`, `qa-report.json` | Lỗi đóng gói |
+| spec | Check Codex sign-in, spec errors, tool selection; create the workspace from the template (QA runs copy the source build); `npm install` | No tools, spec errors, not signed in |
+| codex | Write `factory/tools.json`, `context.md`, the spec and `AGENTS.md` (profile rules); a Codex thread writes adapters and the README | Codex error, cost cap |
+| build | `npm run build` (tsc) with Codex repair rounds, then secret scan | Repair rounds exhausted, secrets found |
+| qa | QA runner (below), then QA-driven repair: fixable failures go back to the same Codex thread, rebuild, re-run QA; stops when a round does not reduce failures | Never fails the stage; results decide the verdicts |
+| package | `npm pack`, sha256, `provenance.json`, `qa-report.json` | Packaging error |
 
-**QA runner:**
+**QA layers:**
 
-| Lớp | Cách chạy | Ghi chú |
-|---|---|---|
-| input | Kiểm tra lại schema của tool, operation không hỗ trợ | |
-| build | Kết quả tsc + secret scan | |
-| interface | Khởi động MCP server (stdio) bằng MCP SDK client, `tools/list` khớp danh sách tool đã chọn và schema; CLI `--help` exit 0, lệnh sai exit ≠ 0 | |
-| contract | Mock server do Factory dựng từ spec, gọi từng tool với tham số mẫu sinh từ schema, kiểm tra method/path/query/body | |
-| error | Mock trả 401/404/429/500: tool phải trả `isError` có thông điệp, server không chết | |
-| runtime | Phân trang, retry, idempotency | `not_run` ở MVP, có lý do |
-| integration | Gọi API thật qua connection `useForQa` với tool `read`; tool ghi chỉ chạy khi `allowWrite` | Không có connection/secret → `not_run`/`blocked` |
-| agent | Đánh giá agent với tác vụ mẫu | `not_run` ở MVP, có lý do |
-| install | Cài tgz vào thư mục sạch, chạy `--help` | |
+| Layer | How |
+|---|---|
+| input | Tool definitions are well formed |
+| build | tsc result and secret scan |
+| interface | MCP `tools/list` matches the selected tools and schemas; CLI `--help`, unknown command → exit 2, `--json` output |
+| contract | A Factory mock built from the spec; each tool is called with sample arguments; method, path, query, body and auth are checked |
+| error | Mock returns 401/404/500 and malformed JSON; the tool must return `isError` with the right category |
+| runtime | Retries on 429 for read tools only, timeout handling; pagination and idempotency are `not_run` in the MVP |
+| integration | Read tools are called on the live QA environment with sample arguments; write tools are credited only by live test cases |
+| agent | A Codex agent uses the generated MCP server for each sample task; scored from observed tool calls, expected tools and answer content; precondition failures reported by the agent become `blocked` |
+| custom | User-defined test cases (single call, multi-step with cleanup) on the mock or live environment |
+| install | Install the tarball in a clean directory, run the CLI and list MCP tools |
 
-**Nhãn:** `packageVerified` = mọi kết quả của input, build, interface, contract, error, install đều `pass`. `integrationVerified` = `yes` nếu mọi tool đã chọn đều pass integration, `partial` nếu có pass và có blocked/not_run, `no` nếu có fail, `not_run` nếu không chạy.
+**Verdicts:** `packageVerified` requires every input, build, interface, contract, error and install result to pass, plus no failures in runtime or custom. `integrationVerified` is `yes` when every selected tool passes integration, `partial` with some passes and some blocked/not run, `no` with any failure, `not_run` otherwise.
 
-## 6. Phiên bản
+**Agent eval permissions:** on a live environment the agent sees read tools only, unless the connection grants `write` or `write_destructive`. The agent runs with the deployment sandbox and auto-approved tool calls. The Factory does not clean up data the agent creates; the agent decides and reports it.
 
-- Export lấy trạng thái hiện tại (snapshot spec mới nhất, context, tool) ghi vào version **draft** mới nhất; nếu chưa có draft thì tạo draft mới với số minor kế tiếp.
-- Release chỉ được khi build mới nhất của version đạt Package verified. Version đã release không bị sửa.
-- Không thể thu hồi package đã tải; deprecate chỉ đánh dấu.
+## 6. Versions
 
-## 7. Chạy local
-
-Xem `README.md` ở thư mục gốc.
+- Export freezes the current spec snapshot, context and tools into the latest draft version, or creates a new draft with the next minor number.
+- Release requires the latest build of the version to be Package verified. Released versions never change.
+- Downloaded packages cannot be revoked; deprecation only marks a version.

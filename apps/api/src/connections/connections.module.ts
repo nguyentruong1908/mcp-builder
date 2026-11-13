@@ -8,12 +8,12 @@ import { parse, resolveSecret } from '../core/util.js';
 import type { Connection } from '../generated/prisma/client.js';
 
 const fields = {
-  name: z.string().trim().regex(/^[a-z0-9][a-z0-9_-]{0,31}$/i, 'Tên môi trường: chữ, số, - hoặc _ (tối đa 32)'),
-  baseUrl: z.string().url().refine((u) => /^https?:/.test(u), 'Chỉ hỗ trợ http/https'),
+  name: z.string().trim().regex(/^[a-z0-9][a-z0-9_-]{0,31}$/i, 'Environment name: letters, digits, - or _ (up to 32)'),
+  baseUrl: z.string().url().refine((u) => /^https?:/.test(u), 'Only http/https is supported'),
   authType: z.enum(['none', 'api_key', 'bearer']),
   authHeader: z.string().regex(/^[A-Za-z0-9-]{1,64}$/),
   // Only references are stored. A literal token here would be a secret leak.
-  secretRef: z.string().max(200).refine((s) => s === '' || /^env:\/\/[A-Za-z_][A-Za-z0-9_]*$/.test(s), 'secretRef phải có dạng env://TEN_BIEN'),
+  secretRef: z.string().max(200).refine((s) => s === '' || /^env:\/\/[A-Za-z_][A-Za-z0-9_]*$/.test(s), 'secretRef must look like env://VAR_NAME'),
   allowWrite: z.boolean(),
   agentAccess: z.enum(['read_only', 'write', 'write_destructive']),
   useForQa: z.boolean(),
@@ -30,7 +30,7 @@ const updateSchema = z.object(fields).partial().strict();
 
 // Agent eval may only change data on an environment that allows writes.
 function checkAgentAccess(v: { allowWrite?: boolean; agentAccess?: string }) {
-  if (v.agentAccess && v.agentAccess !== 'read_only' && !v.allowWrite) throw new BadRequestException('Cho phép agent ghi/xóa cần bật "Cho phép ghi" cho môi trường');
+  if (v.agentAccess && v.agentAccess !== 'read_only' && !v.allowWrite) throw new BadRequestException('Letting the agent write/delete requires "Allow writes" on the environment');
 }
 
 export function authHeaders(c: Pick<Connection, 'authType' | 'authHeader' | 'secretRef'>): Record<string, string> {
@@ -52,9 +52,9 @@ export class ConnectionsController {
   @Post('projects/:id/connections')
   async create(@Param('id') projectId: string, @Body() body: unknown): Promise<ConnectionDto> {
     const input = parse(createSchema, body);
-    if (input.authType !== 'none' && !input.secretRef) throw new BadRequestException('Cần secretRef cho kiểu xác thực này');
+    if (input.authType !== 'none' && !input.secretRef) throw new BadRequestException('This auth type needs a secretRef');
     checkAgentAccess(input);
-    if (await this.prisma.connection.findUnique({ where: { projectId_name: { projectId, name: input.name } } })) throw new BadRequestException(`Môi trường "${input.name}" đã tồn tại`);
+    if (await this.prisma.connection.findUnique({ where: { projectId_name: { projectId, name: input.name } } })) throw new BadRequestException(`Environment "${input.name}" already exists`);
     const c = await this.prisma.$transaction(async (tx) => {
       if (input.useForQa) await tx.connection.updateMany({ where: { projectId }, data: { useForQa: false } });
       return tx.connection.create({ data: { ...input, projectId } });
@@ -67,7 +67,7 @@ export class ConnectionsController {
   async update(@Param('id') id: string, @Body() body: unknown): Promise<ConnectionDto> {
     const input = parse(updateSchema, body);
     const cur = await this.prisma.connection.findUnique({ where: { id } });
-    if (!cur) throw new NotFoundException('Môi trường không tồn tại');
+    if (!cur) throw new NotFoundException('Environment not found');
     // Turning writes off also revokes the agent's data-changing access.
     if (input.allowWrite === false) input.agentAccess = 'read_only';
     checkAgentAccess({ allowWrite: input.allowWrite ?? cur.allowWrite, agentAccess: input.agentAccess ?? cur.agentAccess });
@@ -81,7 +81,7 @@ export class ConnectionsController {
 
   @Delete('connections/:id')
   async remove(@Param('id') id: string) {
-    const c = await this.prisma.connection.delete({ where: { id } }).catch(() => { throw new NotFoundException('Môi trường không tồn tại'); });
+    const c = await this.prisma.connection.delete({ where: { id } }).catch(() => { throw new NotFoundException('Environment not found'); });
     await this.audit.log('connection.delete', c.name, { projectId: c.projectId });
     return { ok: true };
   }
@@ -89,11 +89,11 @@ export class ConnectionsController {
   @Post('connections/:id/test')
   async test(@Param('id') id: string): Promise<ConnectionDto> {
     const c = await this.prisma.connection.findUnique({ where: { id } });
-    if (!c) throw new NotFoundException('Môi trường không tồn tại');
+    if (!c) throw new NotFoundException('Environment not found');
     const started = Date.now();
     let check: ConnectionCheck;
     if (c.authType !== 'none' && !resolveSecret(c.secretRef)) {
-      check = { ok: false, message: `Secret ${c.secretRef || '(trống)'} chưa được cấu hình trên máy chủ`, at: new Date().toISOString() };
+      check = { ok: false, message: `Secret ${c.secretRef || '(empty)'} is not configured on the server`, at: new Date().toISOString() };
     } else {
       try {
         const res = await fetch(c.baseUrl, { headers: authHeaders(c), redirect: 'manual', signal: AbortSignal.timeout(5000) });
@@ -102,11 +102,11 @@ export class ConnectionsController {
           ok: !authFail && res.status < 500,
           status: res.status,
           latencyMs: Date.now() - started,
-          message: authFail ? 'Kết nối được nhưng xác thực bị từ chối' : res.status >= 500 ? 'Máy chủ trả lỗi 5xx' : 'Kết nối được',
+          message: authFail ? 'Reachable, but authentication was rejected' : res.status >= 500 ? 'The server returned 5xx' : 'Reachable',
           at: new Date().toISOString(),
         };
       } catch (err) {
-        check = { ok: false, latencyMs: Date.now() - started, message: `Không kết nối được: ${(err as Error).message}`, at: new Date().toISOString() };
+        check = { ok: false, latencyMs: Date.now() - started, message: `Cannot connect: ${(err as Error).message}`, at: new Date().toISOString() };
       }
     }
     return toConnectionDto(await this.prisma.connection.update({ where: { id }, data: { lastCheck: check as object } }));

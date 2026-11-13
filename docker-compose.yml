@@ -31,7 +31,7 @@ services:
       CODEX_MODEL: ${CODEX_MODEL:-gpt-6-sol}
       CODEX_SANDBOX: ${CODEX_SANDBOX:-danger-full-access}   # container is the isolation boundary (see README)
       CODEX_API_KEY: ${CODEX_API_KEY:-}
-      SPEC_FETCH_ALLOWLIST: ${SPEC_FETCH_ALLOWLIST:-sample-erp,localhost}
+      SPEC_FETCH_ALLOWLIST: ${SPEC_FETCH_ALLOWLIST:-localhost}
     # Secrets referenced by connections as env://NAME (e.g. ERP_TEST_TOKEN=...). Optional file.
     env_file:
       - path: ./secrets.env
@@ -60,17 +60,6 @@ services:
     depends_on:
       - api
       - web
-    restart: unless-stopped
-
-  # Demo target API: docker compose --profile demo up -d
-  sample-erp:
-    image: node:24-alpine
-    profiles: ["demo"]
-    command: ["node", "/app/server.mjs"]
-    environment:
-      SAMPLE_ERP_TOKEN: ${SAMPLE_ERP_TOKEN:-dev-token}
-    volumes:
-      - ./examples/sample-erp:/app:ro
     restart: unless-stopped
 
 volumes:

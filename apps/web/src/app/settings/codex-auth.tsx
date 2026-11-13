@@ -39,39 +39,39 @@ function StatusCard({ s, onChange }: { s: CodexAuthStatus; onChange: (s: CodexAu
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   async function logout() {
-    if (!confirm('Đăng xuất Codex khỏi Factory? Các build mới sẽ không chạy được cho đến khi đăng nhập lại.')) return;
+    if (!confirm('Sign Codex out of Factory? New builds will not run until you sign in again.')) return;
     setBusy(true);
-    try { onChange(await api.codexLogout()); toast('Đã đăng xuất Codex'); } finally { setBusy(false); }
+    try { onChange(await api.codexLogout()); toast('Codex signed out'); } finally { setBusy(false); }
   }
   const rows: [string, React.ReactNode][] = [
-    ['Nguồn', s.source === 'env_api_key' ? 'Biến môi trường CODEX_API_KEY' : s.source === 'auth_file' ? 'auth.json trong CODEX_HOME của Factory' : '—'],
-    ['Kiểu', s.mode === 'chatgpt' ? 'Tài khoản ChatGPT' : s.mode === 'api_key' ? 'API key' : '—'],
-    ['Tài khoản', s.email ?? '—'],
-    ['Gói', s.plan ?? '—'],
-    ['Làm mới token', s.lastRefresh ? fmtDate(s.lastRefresh) : '—'],
+    ['Source', s.source === 'env_api_key' ? 'CODEX_API_KEY environment variable' : s.source === 'auth_file' ? "auth.json in Factory's CODEX_HOME" : '—'],
+    ['Type', s.mode === 'chatgpt' ? 'ChatGPT account' : s.mode === 'api_key' ? 'API key' : '—'],
+    ['Account', s.email ?? '—'],
+    ['Plan', s.plan ?? '—'],
+    ['Token refreshed', s.lastRefresh ? fmtDate(s.lastRefresh) : '—'],
     ['Codex CLI', <span key="v" className="mono">{s.codexVersion}</span>],
     ['Model', <span key="m" className="mono">{s.model}</span>],
-    ['Sandbox', <span key="s" className="inline-flex items-center gap-2"><span className="mono">{s.sandbox}</span>{s.sandbox === 'workspace-write' && (s.sandboxError ? <Badge tone="danger">lỗi</Badge> : <Badge tone="success">hoạt động</Badge>)}</span>],
+    ['Sandbox', <span key="s" className="inline-flex items-center gap-2"><span className="mono">{s.sandbox}</span>{s.sandbox === 'workspace-write' && (s.sandboxError ? <Badge tone="danger">error</Badge> : <Badge tone="success">working</Badge>)}</span>],
   ];
   return (
     <Card className="h-fit">
       <CardHeader
-        title="Trạng thái Codex"
-        description="Tài khoản Factory dùng để sinh code trong các build"
-        actions={s.configured ? <Badge tone="success"><CheckCircle2 className="size-3" />Đã đăng nhập</Badge> : <Badge tone="danger">Chưa đăng nhập</Badge>}
+        title="Codex status"
+        description="The account Factory uses to generate code in builds"
+        actions={s.configured ? <Badge tone="success"><CheckCircle2 className="size-3" />Signed in</Badge> : <Badge tone="danger">Not signed in</Badge>}
       />
       <dl className="kv px-5 pb-5">
         {rows.map(([k, v]) => (<div key={k} className="contents"><dt>{k}</dt><dd>{v}</dd></div>))}
       </dl>
       {s.sandboxError && (
-        <div className="alert alert-danger mx-5 mb-5"><ShieldAlert className="mt-0.5 size-4 shrink-0 text-danger" /><div><b>Sandbox của Codex không chạy được</b>, build sẽ dừng trước bước sinh code.<div className="mt-1 break-words font-mono text-xs">{s.sandboxError}</div></div></div>
+        <div className="alert alert-danger mx-5 mb-5"><ShieldAlert className="mt-0.5 size-4 shrink-0 text-danger" /><div><b>The Codex sandbox cannot start</b>; builds will stop before code generation.<div className="mt-1 break-words font-mono text-xs">{s.sandboxError}</div></div></div>
       )}
       {s.source === 'env_api_key' && (
-        <div className="alert alert-info mx-5 mb-5"><KeyRound className="mt-0.5 size-4 shrink-0 text-info" /><div>CODEX_API_KEY trong môi trường của API đang được ưu tiên hơn thông tin đăng nhập lưu ở đây.</div></div>
+        <div className="alert alert-info mx-5 mb-5"><KeyRound className="mt-0.5 size-4 shrink-0 text-info" /><div>CODEX_API_KEY in the API's environment takes precedence over the credentials stored here.</div></div>
       )}
       {s.source === 'auth_file' && (
         <div className="flex justify-end border-t px-5 py-3">
-          <button className="btn btn-danger btn-sm" disabled={busy} onClick={logout}>{busy ? <Spinner /> : <LogOut className="size-3.5" />}Đăng xuất</button>
+          <button className="btn btn-danger btn-sm" disabled={busy} onClick={logout}>{busy ? <Spinner /> : <LogOut className="size-3.5" />}Sign out</button>
         </div>
       )}
     </Card>
@@ -82,7 +82,7 @@ function LoginCard({ s, onChange }: { s: CodexAuthStatus; onChange: (s: CodexAut
   const [method, setMethod] = useState<Method>('device');
   return (
     <Card>
-      <CardHeader title={s.configured ? 'Đổi tài khoản Codex' : 'Đăng nhập Codex'} description="Thông tin đăng nhập lưu trong volume dữ liệu của Factory (CODEX_HOME), không lưu vào database và không bao giờ hiển thị lại." />
+      <CardHeader title={s.configured ? 'Switch Codex account' : 'Sign in to Codex'} description="Credentials are stored in Factory's data volume (CODEX_HOME), never in the database, and are never shown again." />
       <div className="px-5">
         <Tabs value={method} onChange={setMethod} tabs={[
           { id: 'device', label: <span className="inline-flex items-center gap-1.5"><MonitorSmartphone className="size-3.5" />ChatGPT</span> },
@@ -106,7 +106,7 @@ function DeviceLogin({ s, onChange }: { s: CodexAuthStatus; onChange: (s: CodexA
   const d = s.device;
   const prev = useRef(d.state);
   useEffect(() => {
-    if (prev.current === 'pending' && d.state === 'success') toast('Đăng nhập Codex thành công');
+    if (prev.current === 'pending' && d.state === 'success') toast('Signed in to Codex');
     prev.current = d.state;
   }, [d.state, toast]);
 
@@ -124,24 +124,24 @@ function DeviceLogin({ s, onChange }: { s: CodexAuthStatus; onChange: (s: CodexA
       <div className="space-y-4">
         <ol className="space-y-4 text-sm">
           <li>
-            <div className="font-medium">1. Mở trang đăng nhập và đăng nhập tài khoản ChatGPT</div>
-            {d.url ? <a href={d.url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex items-center gap-1.5 font-mono text-xs text-info underline underline-offset-2">{d.url}<ExternalLink className="size-3" /></a> : <div className="mt-1 flex items-center gap-2 text-muted-foreground"><Spinner />Đang lấy đường dẫn…</div>}
+            <div className="font-medium">1. Open the sign-in page and sign in with your ChatGPT account</div>
+            {d.url ? <a href={d.url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex items-center gap-1.5 font-mono text-xs text-info underline underline-offset-2">{d.url}<ExternalLink className="size-3" /></a> : <div className="mt-1 flex items-center gap-2 text-muted-foreground"><Spinner />Getting the link…</div>}
           </li>
           <li>
-            <div className="font-medium">2. Nhập mã một lần</div>
+            <div className="font-medium">2. Enter the one-time code</div>
             {d.code ? (
               <div className="mt-2 flex items-center gap-3">
                 <span className="rounded-lg border bg-muted px-4 py-2 font-mono text-2xl font-semibold tracking-[0.2em]">{d.code}</span>
-                <button className="btn btn-outline btn-sm" onClick={() => { void navigator.clipboard?.writeText(d.code!).then(() => toast('Đã copy mã'), () => undefined); }} aria-label="Copy mã"><Copy className="size-3.5" />Copy</button>
+                <button className="btn btn-outline btn-sm" onClick={() => { void navigator.clipboard?.writeText(d.code!).then(() => toast('Code copied'), () => undefined); }} aria-label="Copy code"><Copy className="size-3.5" />Copy</button>
               </div>
-            ) : <div className="mt-1 flex items-center gap-2 text-muted-foreground"><Spinner />Đang lấy mã…</div>}
-            {d.expiresAt && <div className="hint">Hết hạn lúc {fmtDate(d.expiresAt)}. Trang này tự cập nhật khi bạn xác nhận xong.</div>}
+            ) : <div className="mt-1 flex items-center gap-2 text-muted-foreground"><Spinner />Getting the code…</div>}
+            {d.expiresAt && <div className="hint">Expires at {fmtDate(d.expiresAt)}. This page updates automatically once you confirm.</div>}
           </li>
         </ol>
-        <div className="alert alert-warning"><ShieldAlert className="mt-0.5 size-4 shrink-0 text-warning" /><div>Chỉ nhập mã này nếu chính bạn vừa bấm đăng nhập ở đây. Không đưa mã cho người khác.</div></div>
+        <div className="alert alert-warning"><ShieldAlert className="mt-0.5 size-4 shrink-0 text-warning" /><div>Only enter this code if you just started the sign-in here. Never share it with anyone.</div></div>
         <div className="flex items-center justify-between">
-          <span className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner />Đang chờ xác nhận…</span>
-          <button className="btn btn-ghost btn-sm" disabled={busy} onClick={cancel}>Hủy</button>
+          <span className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner />Waiting for confirmation…</span>
+          <button className="btn btn-ghost btn-sm" disabled={busy} onClick={cancel}>Cancel</button>
         </div>
       </div>
     );
@@ -149,12 +149,12 @@ function DeviceLogin({ s, onChange }: { s: CodexAuthStatus; onChange: (s: CodexA
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">Factory chạy <code className="mono">codex login --device-auth</code> trên máy chủ. Bạn đăng nhập ChatGPT từ trình duyệt bất kỳ bằng mã một lần, không cần cài Codex trên máy mình. Cách này phù hợp nhất khi Factory chạy trong Docker hoặc trên server.</p>
-      {d.state === 'success' && <div className="alert alert-info"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" /><div>Lần đăng nhập gần nhất thành công.</div></div>}
-      {d.state === 'failed' && <InlineError error={`Đăng nhập thất bại: ${d.error ?? 'không rõ lỗi'}`} />}
-      {d.state === 'cancelled' && <p className="text-sm text-muted-foreground">Đã hủy phiên đăng nhập trước.</p>}
+      <p className="text-sm text-muted-foreground">Factory runs <code className="mono">codex login --device-auth</code> on the server. You sign in to ChatGPT from any browser with a one-time code; no Codex install needed on your machine. Best when Factory runs in Docker or on a server.</p>
+      {d.state === 'success' && <div className="alert alert-info"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" /><div>The last sign-in succeeded.</div></div>}
+      {d.state === 'failed' && <InlineError error={`Sign-in failed: ${d.error ?? 'unknown error'}`} />}
+      {d.state === 'cancelled' && <p className="text-sm text-muted-foreground">The previous sign-in was cancelled.</p>}
       <InlineError error={err} />
-      <button className="btn btn-primary" disabled={busy} onClick={start}>{busy ? <Spinner /> : <MonitorSmartphone className="size-4" />}Bắt đầu đăng nhập</button>
+      <button className="btn btn-primary" disabled={busy} onClick={start}>{busy ? <Spinner /> : <MonitorSmartphone className="size-4" />}Start sign-in</button>
     </div>
   );
 }
@@ -166,15 +166,15 @@ function ApiKeyLogin({ onChange }: { onChange: (s: CodexAuthStatus) => void }) {
   const [err, setErr] = useState<string | null>(null);
   async function save() {
     setBusy(true); setErr(null);
-    try { onChange(await api.codexApiKey({ apiKey: key })); setKey(''); toast('Đã lưu API key cho Codex'); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+    try { onChange(await api.codexApiKey({ apiKey: key })); setKey(''); toast('Codex API key saved'); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   }
   return (
     <div className="space-y-4">
-      <Field label="OpenAI API key" hint="Chạy codex login --with-api-key trên máy chủ. Chi phí build tính vào tài khoản API này.">
+      <Field label="OpenAI API key" hint="Runs codex login --with-api-key on the server. Build costs are billed to this API account.">
         {(id) => <input id={id} type="password" autoComplete="off" spellCheck={false} className="input font-mono text-xs" placeholder="sk-..." value={key} onChange={(e) => setKey(e.target.value)} />}
       </Field>
       <InlineError error={err} />
-      <button className="btn btn-primary" disabled={busy || !key.trim()} onClick={save}>{busy && <Spinner />}Lưu API key</button>
+      <button className="btn btn-primary" disabled={busy || !key.trim()} onClick={save}>{busy && <Spinner />}Save API key</button>
     </div>
   );
 }
@@ -186,14 +186,14 @@ function UploadAuth({ onChange }: { onChange: (s: CodexAuthStatus) => void }) {
   const [err, setErr] = useState<string | null>(null);
   async function upload() {
     if (!file) return;
-    if (file.size > 64 * 1024) { setErr('File quá lớn (tối đa 64KB)'); return; }
+    if (file.size > 64 * 1024) { setErr('File too large (max 64KB)'); return; }
     setBusy(true); setErr(null);
-    try { onChange(await api.codexUpload({ content: await file.text() })); setFile(null); toast('Đã cập nhật auth.json'); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+    try { onChange(await api.codexUpload({ content: await file.text() })); setFile(null); toast('auth.json updated'); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   }
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">Chạy <code className="mono">codex login</code> trên một máy có trình duyệt rồi upload file <code className="mono">~/.codex/auth.json</code>.</p>
-      <div className="alert alert-warning"><TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" /><div>Nếu file này vẫn đang được dùng trên máy khác, khi một bên làm mới token thì bên kia có thể bị đăng xuất. Nên dùng một phiên đăng nhập riêng cho Factory, hoặc dùng cách <b>Đăng nhập ChatGPT</b>.</div></div>
+      <p className="text-sm text-muted-foreground">Run <code className="mono">codex login</code> on a machine with a browser, then upload <code className="mono">~/.codex/auth.json</code>.</p>
+      <div className="alert alert-warning"><TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" /><div>If this file is still in use on another machine, a token refresh on one side can sign the other out. Prefer a dedicated sign-in for Factory, or use <b>ChatGPT sign-in</b>.</div></div>
       <Field label="auth.json">
         {(id) => <input id={id} type="file" accept="application/json,.json" className="input h-auto py-1.5 text-xs file:mr-3 file:rounded file:border-0 file:bg-muted file:px-2 file:py-1 file:text-foreground" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />}
       </Field>

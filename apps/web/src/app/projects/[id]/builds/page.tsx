@@ -23,19 +23,19 @@ export default function BuildsPage() {
 
   return (
     <>
-      <PageHeader title="Builds" description="Export chạy dưới dạng job nền: generation → build → QA → đóng gói. QA run chạy lại QA trên code của một build, bỏ qua Codex." />
+      <PageHeader title="Builds" description="Exports run as background jobs: generation → build → QA → package. A QA run re-runs QA on a build's code and skips Codex." />
       <Loaded q={q}>
         {(list) => list.length === 0 ? (
-          <Card><EmptyState icon={<Hammer className="size-5" />} title="Chưa có build nào" description="Bấm Export ở góc trên để chạy build đầu tiên." /></Card>
+          <Card><EmptyState icon={<Hammer className="size-5" />} title="No builds yet" description="Click Export at the top to run your first build." /></Card>
         ) : (
           <Card className="overflow-hidden">
             <div className="overflow-x-auto">
               <table className="tbl">
-                <thead><tr><th>Build</th><th>Version</th><th>Kết quả</th><th>Thời gian</th><th>Chi phí</th><th>Vòng sửa</th><th>Người chạy</th><th>Lúc</th></tr></thead>
+                <thead><tr><th>Build</th><th>Version</th><th>Result</th><th>Duration</th><th>Cost</th><th>Repairs</th><th>Triggered by</th><th>When</th></tr></thead>
                 <tbody>
                   {list.map((b) => (
                     <tr key={b.id}>
-                      <td><Link href={`/projects/${id}/builds/${b.id}`} className="mono font-medium hover:underline">{b.label}</Link>{b.kind === 'qa' && b.sourceBuildId && <div className="text-xs text-muted-foreground">trên code của <Link href={`/projects/${id}/builds/${b.sourceBuildId}`} className="mono hover:underline">{b.sourceBuildLabel}</Link></div>}</td>
+                      <td><Link href={`/projects/${id}/builds/${b.id}`} className="mono font-medium hover:underline">{b.label}</Link>{b.kind === 'qa' && b.sourceBuildId && <div className="text-xs text-muted-foreground">on the code of <Link href={`/projects/${id}/builds/${b.sourceBuildId}`} className="mono hover:underline">{b.sourceBuildLabel}</Link></div>}</td>
                       <td className="mono">{b.versionNumber}</td>
                       <td><BuildBadges b={b} /></td>
                       <td className="tabular-nums">{fmtDuration(b.durationMs)}</td>

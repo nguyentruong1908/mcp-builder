@@ -24,7 +24,7 @@ export function GenerationProfilePanel() {
     try {
       const saved = await api.saveGenerationProfile(form);
       q.setData((prev) => (prev ? [saved, prev[1], prev[2]] : prev));
-      toast(`Đã lưu generation profile v${saved.version}`);
+      toast(`Generation profile v${saved.version} saved`);
     } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   }
 
@@ -32,18 +32,18 @@ export function GenerationProfilePanel() {
     <Loaded q={q}>
       {([profile, models, settings]) => form && (
         <Card className="max-w-3xl">
-          <CardHeader title="Generation profile của workspace"
-            description="Cách Codex sinh adapter cho mọi project. Project có thể ghi đè model/reasoning và nối thêm quy tắc riêng."
+          <CardHeader title="Workspace generation profile"
+            description="How Codex generates adapters for every project. Projects can override model/reasoning and append their own rules."
             actions={<Badge tone="outline">v{profile.version}{profile.updatedAt ? ` · ${fmtDate(profile.updatedAt)}` : ''}</Badge>} />
           <div className="px-5 pb-5">
             <GenerationFields value={form} onChange={setForm} models={models}
-              inheritedModel={settings.codexModel} inheritedLabel={`CODEX_MODEL của máy chủ (${settings.codexModel})`}
-              rulesLabel="Quy tắc của workspace (AGENTS.md)" />
+              inheritedModel={settings.codexModel} inheritedLabel={`the server CODEX_MODEL (${settings.codexModel})`}
+              rulesLabel="Workspace rules (AGENTS.md)" />
             <div className="mt-4"><InlineError error={err} /></div>
             <div className="mt-6 flex items-center justify-end gap-2 border-t pt-4">
-              <span className="mr-auto text-xs text-muted-foreground">Mỗi lần lưu tạo version mới; build ghi version và hash quy tắc vào provenance.</span>
-              <button className="btn btn-ghost" onClick={() => setForm({ model: profile.model, reasoningEffort: profile.reasoningEffort, rules: profile.rules })}>Hoàn tác</button>
-              <button className="btn btn-primary" disabled={busy} onClick={save}>{busy && <Spinner />}Lưu</button>
+              <span className="mr-auto text-xs text-muted-foreground">Each save creates a new version; builds record the version and the rules hash in provenance.</span>
+              <button className="btn btn-ghost" onClick={() => setForm({ model: profile.model, reasoningEffort: profile.reasoningEffort, rules: profile.rules })}>Revert</button>
+              <button className="btn btn-primary" disabled={busy} onClick={save}>{busy && <Spinner />}Save</button>
             </div>
           </div>
         </Card>

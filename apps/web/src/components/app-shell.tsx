@@ -28,7 +28,7 @@ const projectNav = [
 function pageTitle(pathname: string) {
   if (pathname === '/') return 'Dashboard';
   if (pathname.startsWith('/settings')) return 'Settings & Audit';
-  if (pathname === '/projects/new') return 'Tạo project';
+  if (pathname === '/projects/new') return 'New project';
   const m = pathname.match(/^\/projects\/[^/]+(\/[^/]+)?(\/[^/]+)?/);
   if (m?.[1] === '/builds' && m[2]) return 'Build';
   return projectNav.find((n) => n.seg === (m?.[1] ?? ''))?.label ?? '';
@@ -67,7 +67,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <span className="badge badge-outline ml-auto">beta</span>
           </div>
 
-          <nav className="flex-1 overflow-y-auto px-3 pb-4" aria-label="Điều hướng chính">
+          <nav className="flex-1 overflow-y-auto px-3 pb-4" aria-label="Main navigation">
             <div className="nav-group">Workspace</div>
             <Link href="/" className={cn('nav-item', pathname === '/' && 'active')}><LayoutDashboard className="size-4" />Dashboard</Link>
             <Link href="/settings" className={cn('nav-item', pathname.startsWith('/settings') && 'active')}><Settings2 className="size-4" />Settings &amp; Audit</Link>
@@ -81,7 +81,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <Link key={n.seg} href={href} className={cn('nav-item', active && 'active')}>
                   <n.icon className="size-4" />
                   <span className="flex-1">{n.label}</span>
-                  {n.seg === '/builds' && running && <Loader2 className="size-3.5 animate-spin text-brand" aria-label="Đang build" />}
+                  {n.seg === '/builds' && running && <Loader2 className="size-3.5 animate-spin text-brand" aria-label="Building" />}
                 </Link>
               );
             })}
@@ -92,7 +92,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <span className="avatar">LW</span>
               <div className="min-w-0 flex-1 leading-tight">
                 <div className="truncate text-[13px] font-medium">Local user</div>
-                <div className="truncate text-[11px] text-muted-foreground">Chưa bật đăng nhập</div>
+                <div className="truncate text-[11px] text-muted-foreground">Sign-in not enabled</div>
               </div>
               <ThemeToggle />
             </div>
@@ -101,7 +101,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b bg-background/80 px-4 backdrop-blur md:px-6">
-            <button className="btn btn-ghost btn-icon md:hidden" onClick={() => setMobileNav(true)} aria-label="Mở menu"><Menu className="size-4" /></button>
+            <button className="btn btn-ghost btn-icon md:hidden" onClick={() => setMobileNav(true)} aria-label="Open menu"><Menu className="size-4" /></button>
             <nav className="flex min-w-0 flex-1 items-center gap-1.5 text-sm text-muted-foreground" aria-label="Breadcrumb">
               <Link href="/" className="hidden hover:text-foreground sm:inline">Workspace</Link>
               {p && <>
@@ -118,7 +118,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             )}
             <a className="btn btn-outline btn-sm hidden sm:inline-flex" href="https://modelcontextprotocol.io" target="_blank" rel="noreferrer"><BookOpen className="size-3.5" />MCP docs</a>
             {projectId && (running ? (
-              <Link className="btn btn-primary" href={`${base}/builds/${running.id}`}><Spinner />Đang export…</Link>
+              <Link className="btn btn-primary" href={`${base}/builds/${running.id}`}><Spinner />Exporting…</Link>
             ) : (
               <button className="btn btn-primary" disabled={!p || !!p.archivedAt} onClick={() => setExportOpen(true)}><Play className="size-4" />Export</button>
             ))}
@@ -145,14 +145,14 @@ function ProjectSwitcher({ current }: { current: { id: string; name: string; lat
     return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
   }, [open]);
 
-  const sub = current ? (current.latestDraft ? `draft ${current.latestDraft.number}` : current.currentRelease ? `release ${current.currentRelease.number}` : 'chưa có version') : 'Chọn project';
+  const sub = current ? (current.latestDraft ? `draft ${current.latestDraft.number}` : current.currentRelease ? `release ${current.currentRelease.number}` : 'no version yet') : 'Select a project';
   return (
     <div className="relative mb-1.5" ref={ref}>
       <button aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen((o) => !o)}
         className="flex w-full items-center gap-2.5 rounded-md border bg-background px-2.5 py-2 text-left transition-colors hover:bg-muted">
         <div className="flex size-7 items-center justify-center rounded bg-info-soft text-[11px] font-bold text-info">{current ? initials(current.name) : '–'}</div>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[13px] font-medium">{current?.name ?? 'Chưa chọn project'}</div>
+          <div className="truncate text-[13px] font-medium">{current?.name ?? 'No project selected'}</div>
           <div className="truncate text-[11px] text-muted-foreground">{sub}</div>
         </div>
         <ChevronsUpDown className="size-3.5 text-muted-foreground" />
@@ -161,8 +161,8 @@ function ProjectSwitcher({ current }: { current: { id: string; name: string; lat
         <div className="absolute inset-x-0 top-full z-50 mt-1 overflow-hidden rounded-lg border bg-card shadow-xl" role="listbox">
           <div className="max-h-72 overflow-y-auto py-1">
             {list.error && <div className="px-3 py-2 text-xs text-danger">{list.error.message}</div>}
-            {!list.data && !list.error && <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground"><Spinner className="size-3.5" />Đang tải…</div>}
-            {list.data?.length === 0 && <div className="px-3 py-2 text-xs text-muted-foreground">Chưa có project nào</div>}
+            {!list.data && !list.error && <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground"><Spinner className="size-3.5" />Loading…</div>}
+            {list.data?.length === 0 && <div className="px-3 py-2 text-xs text-muted-foreground">No projects yet</div>}
             {list.data?.filter((x) => !x.archivedAt).map((x) => (
               <Link key={x.id} href={`/projects/${x.id}`} role="option" aria-selected={x.id === current?.id} onClick={() => setOpen(false)}
                 className={cn('flex items-center gap-2 px-3 py-2 text-[13px] hover:bg-muted', x.id === current?.id && 'bg-muted font-medium')}>
@@ -171,7 +171,7 @@ function ProjectSwitcher({ current }: { current: { id: string; name: string; lat
             ))}
           </div>
           <Link href="/projects/new" onClick={() => setOpen(false)} className="flex items-center gap-2 border-t px-3 py-2 text-[13px] text-muted-foreground hover:bg-muted hover:text-foreground">
-            <Plus className="size-3.5" />Tạo project
+            <Plus className="size-3.5" />New project
           </Link>
         </div>
       )}
@@ -189,7 +189,7 @@ function ThemeToggle() {
     try { localStorage.setItem('mf-theme', next ? 'dark' : 'light'); } catch {}
   }
   return (
-    <button className="btn btn-ghost btn-icon size-8" onClick={toggle} aria-label="Đổi giao diện sáng/tối">
+    <button className="btn btn-ghost btn-icon size-8" onClick={toggle} aria-label="Toggle light/dark theme">
       {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
     </button>
   );

@@ -27,8 +27,8 @@ export default function ProjectOverviewPage() {
   const [editing, setEditing] = useState(false);
 
   async function archive(p: ProjectDetail) {
-    if (!confirm(`Archive project “${p.name}”? Lịch sử được giữ nguyên; package đã tải không bị thu hồi.`)) return;
-    try { await api.archiveProject(p.id); toast('Đã archive project'); router.push('/'); }
+    if (!confirm(`Archive project “${p.name}”? History is kept; downloaded packages are not revoked.`)) return;
+    try { await api.archiveProject(p.id); toast('Project archived'); router.push('/'); }
     catch (e) { toast((e as Error).message, 'error'); }
   }
 
@@ -42,19 +42,19 @@ export default function ProjectOverviewPage() {
                 <span className="flex size-10 items-center justify-center rounded-lg bg-info-soft text-sm font-bold text-info">{initials(p.name)}</span>
                 {p.name}
                 {p.currentRelease && <Badge tone="success">{p.currentRelease.number} released</Badge>}
-                {p.latestDraft && <Badge>{p.latestDraft.number} nháp</Badge>}
-                {p.archivedAt && <Badge tone="warning">Đã archive</Badge>}
+                {p.latestDraft && <Badge>{p.latestDraft.number} draft</Badge>}
+                {p.archivedAt && <Badge tone="warning">Archived</Badge>}
               </span>
             }
-            description={p.description || 'Chưa có mô tả.'}
+            description={p.description || 'No description.'}
             actions={<>
-              <button className="btn btn-outline" onClick={() => setEditing(true)}><Pencil className="size-4" />Sửa</button>
+              <button className="btn btn-outline" onClick={() => setEditing(true)}><Pencil className="size-4" />Edit</button>
               <button className="btn btn-danger" disabled={!!p.archivedAt} onClick={() => archive(p)}><Archive className="size-4" />Archive</button>
             </>}
           />
 
           <Card>
-            <CardHeader title="Tiến trình" description="Từ tạo project đến phiên bản tiếp theo" />
+            <CardHeader title="Progress" description="From project creation to the next version" />
             <div className="overflow-x-auto px-5 pb-5">
               <ol className="flex min-w-[880px] items-start">
                 {p.steps.map((s, i) => (
@@ -76,55 +76,55 @@ export default function ProjectOverviewPage() {
 
           <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
             <Card>
-              <CardHeader title="Thông tin" />
+              <CardHeader title="Details" />
               <dl className="kv px-5 pb-5">
                 <dt>Owner</dt><dd>{p.owner || '—'}</dd>
                 <dt>Slug</dt><dd className="mono">{p.slug}</dd>
-                <dt>Nguồn API</dt><dd className="mono">{p.specSource ?? <Link href={`/projects/${p.id}/api`} className="text-brand hover:underline">Import Swagger</Link>}</dd>
-                <dt>Tool</dt><dd>{p.selectedCount} được chọn / {p.toolCount} hỗ trợ</dd>
-                <dt>Đầu ra</dt><dd className="flex flex-wrap gap-1">{p.outputs.mcp && <Badge>MCP</Badge>}{p.outputs.cli && <Badge>CLI</Badge>}{!p.outputs.mcp && !p.outputs.cli && '—'}</dd>
-                <dt>Tạo lúc</dt><dd>{fmtDate(p.createdAt)}</dd>
+                <dt>API source</dt><dd className="mono">{p.specSource ?? <Link href={`/projects/${p.id}/api`} className="text-brand hover:underline">Import Swagger</Link>}</dd>
+                <dt>Tools</dt><dd>{p.selectedCount} selected / {p.toolCount} supported</dd>
+                <dt>Outputs</dt><dd className="flex flex-wrap gap-1">{p.outputs.mcp && <Badge>MCP</Badge>}{p.outputs.cli && <Badge>CLI</Badge>}{!p.outputs.mcp && !p.outputs.cli && '—'}</dd>
+                <dt>Created</dt><dd>{fmtDate(p.createdAt)}</dd>
               </dl>
             </Card>
 
             <Card>
-              <CardHeader title="Release hiện tại" description={p.currentRelease ? `Released ${fmtDate(p.currentRelease.releasedAt)}` : undefined}
+              <CardHeader title="Current release" description={p.currentRelease ? `Released ${fmtDate(p.currentRelease.releasedAt)}` : undefined}
                 actions={p.currentRelease && <span className="mono text-lg font-semibold">{p.currentRelease.number}</span>} />
               <div className="px-5 pb-5">
                 {p.currentRelease ? (
                   <>
                     <dl className="kv"><dt>API version</dt><dd>{p.currentRelease.apiVersion || '—'}</dd></dl>
-                    <Link href={`/projects/${p.id}/versions`} className="btn btn-outline btn-sm mt-4"><Download className="size-3.5" />Tải package</Link>
+                    <Link href={`/projects/${p.id}/versions`} className="btn btn-outline btn-sm mt-4"><Download className="size-3.5" />Download package</Link>
                   </>
-                ) : <p className="text-sm text-muted-foreground">Chưa có bản release. Export và đạt Package verified để release.</p>}
+                ) : <p className="text-sm text-muted-foreground">No release yet. Export and pass Package verified to release.</p>}
               </div>
             </Card>
 
             <Card className={cn(p.latestBuild?.packageVerified === false && 'border-danger/40')}>
-              <CardHeader title="Build mới nhất" description={p.latestBuild ? `${p.latestBuild.label} · ${fmtDate(p.latestBuild.createdAt)}` : undefined}
+              <CardHeader title="Latest build" description={p.latestBuild ? `${p.latestBuild.label} · ${fmtDate(p.latestBuild.createdAt)}` : undefined}
                 actions={p.latestBuild && <span className="mono text-lg font-semibold">{p.latestBuild.versionNumber}</span>} />
               <div className="px-5 pb-5">
                 {p.latestBuild ? (
                   <>
                     <div className="flex flex-wrap gap-1.5">
                       <Badge tone={buildStatusMeta[p.latestBuild.status].tone}>{buildStatusMeta[p.latestBuild.status].label}</Badge>
-                      {p.latestBuild.packageVerified !== null && <Badge tone={p.latestBuild.packageVerified ? 'success' : 'danger'}>Package {p.latestBuild.packageVerified ? 'verified' : 'không đạt'}</Badge>}
+                      {p.latestBuild.packageVerified !== null && <Badge tone={p.latestBuild.packageVerified ? 'success' : 'danger'}>Package {p.latestBuild.packageVerified ? 'verified' : 'failed'}</Badge>}
                       {p.latestBuild.integrationVerified && <Badge tone={verdictMeta[p.latestBuild.integrationVerified].tone}>{verdictMeta[p.latestBuild.integrationVerified].label}</Badge>}
                     </div>
                     {p.latestBuild.error && <div className="mt-3"><InlineError error={p.latestBuild.error} /></div>}
                     <div className="mt-4 flex gap-2">
                       <Link className="btn btn-outline btn-sm" href={`/projects/${p.id}/qa?build=${p.latestBuild.id}`}>QA report</Link>
-                      <Link className="btn btn-ghost btn-sm" href={`/projects/${p.id}/builds/${p.latestBuild.id}`}>Xem build</Link>
+                      <Link className="btn btn-ghost btn-sm" href={`/projects/${p.id}/builds/${p.latestBuild.id}`}>View build</Link>
                     </div>
                   </>
-                ) : <p className="text-sm text-muted-foreground">Chưa có build nào. Bấm Export ở góc trên khi đã chọn tool.</p>}
+                ) : <p className="text-sm text-muted-foreground">No builds yet. Click Export at the top once tools are selected.</p>}
               </div>
             </Card>
           </div>
 
           <ProjectGenerationCard projectId={p.id} />
 
-          <EditProject open={editing} project={p} onClose={() => setEditing(false)} onSaved={(np) => { q.setData(np); setEditing(false); toast('Đã lưu'); }} />
+          <EditProject open={editing} project={p} onClose={() => setEditing(false)} onSaved={(np) => { q.setData(np); setEditing(false); toast('Saved'); }} />
         </>
       )}
     </Loaded>
@@ -140,11 +140,11 @@ function EditProject({ open, project, onClose, onSaved }: { open: boolean; proje
     try { onSaved(await api.updateProject(project.id, form)); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   }
   return (
-    <Modal open={open} onClose={onClose} title="Sửa project"
-      footer={<><button className="btn btn-ghost" onClick={onClose}>Hủy</button><button className="btn btn-primary" disabled={busy || !form.name.trim()} onClick={save}>{busy && <Spinner />}Lưu</button></>}>
+    <Modal open={open} onClose={onClose} title="Edit project"
+      footer={<><button className="btn btn-ghost" onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={busy || !form.name.trim()} onClick={save}>{busy && <Spinner />}Save</button></>}>
       <div className="space-y-4">
-        <Field label="Tên">{(id) => <input id={id} className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />}</Field>
-        <Field label="Mô tả">{(id) => <textarea id={id} className="textarea" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />}</Field>
+        <Field label="Name">{(id) => <input id={id} className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />}</Field>
+        <Field label="Description">{(id) => <textarea id={id} className="textarea" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />}</Field>
         <Field label="Owner">{(id) => <input id={id} className="input" value={form.owner} onChange={(e) => setForm({ ...form, owner: e.target.value })} />}</Field>
         <div className="flex gap-6">
           <label className="flex items-center gap-2 text-sm"><Switch label="MCP" checked={form.outputs.mcp} onChange={(v) => setForm({ ...form, outputs: { ...form.outputs, mcp: v } })} />MCP</label>
