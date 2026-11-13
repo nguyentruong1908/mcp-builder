@@ -1,0 +1,78 @@
+# MCP Factory: full stack.  cp .env.example .env && docker compose up -d --build
+# Open http://localhost:8080, then Settings › Codex to sign in.
+name: mcp-factory
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: mcp
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mcp}
+      POSTGRES_DB: mcp_factory
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # Published on loopback only so `pnpm dev` can use it too; remove for pure server deploys.
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mcp -d mcp_factory"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://mcp:${POSTGRES_PASSWORD:-mcp}@postgres:5432/mcp_factory?schema=public
+      WEB_ORIGIN: ${PUBLIC_URL:-http://localhost:8080}
+      CODEX_MODEL: ${CODEX_MODEL:-gpt-6-sol}
+      CODEX_SANDBOX: ${CODEX_SANDBOX:-danger-full-access}   # container is the isolation boundary (see README)
+      CODEX_API_KEY: ${CODEX_API_KEY:-}
+      SPEC_FETCH_ALLOWLIST: ${SPEC_FETCH_ALLOWLIST:-sample-erp,localhost}
+    # Secrets referenced by connections as env://NAME (e.g. ERP_TEST_TOKEN=...). Optional file.
+    env_file:
+      - path: ./secrets.env
+        required: false
+    volumes:
+      - factory-data:/data   # build workspaces, artifacts and the Codex login (CODEX_HOME)
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: /api
+    restart: unless-stopped
+
+  gateway:
+    image: caddy:2-alpine
+    ports:
+      - "${MCP_FACTORY_BIND:-127.0.0.1:8080}:80"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - api
+      - web
+    restart: unless-stopped
+
+  # Demo target API: docker compose --profile demo up -d
+  sample-erp:
+    image: node:24-alpine
+    profiles: ["demo"]
+    command: ["node", "/app/server.mjs"]
+    environment:
+      SAMPLE_ERP_TOKEN: ${SAMPLE_ERP_TOKEN:-dev-token}
+    volumes:
+      - ./examples/sample-erp:/app:ro
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  factory-data:

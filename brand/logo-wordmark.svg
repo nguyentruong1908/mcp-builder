@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 286 64" role="img" aria-labelledby="title">
+  <title id="title">MCP Factory</title>
+  <path fill="#22c55e" d="M46 33h11v5H46zm0 11h11v5H46z"/>
+  <path fill="currentColor" fill-rule="evenodd" d="M8 28 21 18v10l13-10v10l13-10v33H8V28Zm8 2v5l8 4-8 4v4l12-6v-4L16 30Zm14 13v4h12v-4H30Z"/>
+  <text x="73" y="42" fill="currentColor" font-family="IBM Plex Sans, sans-serif" font-size="29" font-weight="600" letter-spacing="-0.8">MCP Factory</text>
+</svg>
