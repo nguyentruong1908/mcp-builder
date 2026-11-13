@@ -1,0 +1,12 @@
+# Single public entry point: UI and API on one origin (no CORS, SSE-friendly).
+:80 {
+	handle /api/* {
+		reverse_proxy api:4000 {
+			# Stream build logs (SSE) without buffering.
+			flush_interval -1
+		}
+	}
+	handle {
+		reverse_proxy web:3000
+	}
+}

@@ -1,0 +1,214 @@
+openapi: 3.0.3
+info:
+  title: Sample ERP Sales API
+  version: 4.3.0
+  description: Demo ERP API used to try MCP Factory end to end.
+servers:
+  - url: http://localhost:4010
+security:
+  - bearerAuth: []
+tags:
+  - name: Customers
+  - name: Sales Orders
+  - name: Products
+  - name: Invoices
+  - name: Reports
+paths:
+  /customers:
+    get:
+      tags: [Customers]
+      operationId: searchCustomers
+      summary: Search customers by name or customer code
+      parameters:
+        - { name: q, in: query, schema: { type: string }, description: Name or customerCode fragment }
+        - { name: limit, in: query, schema: { type: integer, maximum: 50, default: 20 } }
+      responses:
+        '200':
+          description: Matching customers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Customer' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /customers/{code}:
+    get:
+      tags: [Customers]
+      operationId: getCustomer
+      summary: Get one customer by customer code (e.g. C0042)
+      parameters:
+        - { name: code, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Customer, content: { application/json: { schema: { $ref: '#/components/schemas/Customer' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /sales-orders:
+    get:
+      tags: [Sales Orders]
+      operationId: searchSalesOrders
+      summary: Search sales orders by customer and status
+      parameters:
+        - { name: customer, in: query, schema: { type: string }, description: customerCode }
+        - { name: status, in: query, schema: { type: string, enum: [Draft, Confirmed, Shipped] } }
+        - { name: limit, in: query, schema: { type: integer, maximum: 50, default: 20 } }
+        - { name: cursor, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: Page of orders
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/SalesOrder' } }
+                  nextCursor: { type: string, nullable: true }
+    post:
+      tags: [Sales Orders]
+      operationId: createSalesOrder
+      summary: Create a sales order in Draft status
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [customerCode, lines]
+              properties:
+                customerCode: { type: string, description: ERP customer code }
+                lines: { type: array, items: { $ref: '#/components/schemas/OrderLine' } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/SalesOrder' } } } }
+        '400': { description: Invalid input }
+  /sales-orders/{id}:
+    get:
+      tags: [Sales Orders]
+      operationId: getSalesOrder
+      summary: Get one sales order
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Order, content: { application/json: { schema: { $ref: '#/components/schemas/SalesOrder' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Sales Orders]
+      operationId: updateSalesOrder
+      summary: Update order lines
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                lines: { type: array, items: { $ref: '#/components/schemas/OrderLine' } }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/SalesOrder' } } } }
+    delete:
+      tags: [Sales Orders]
+      operationId: deleteSalesOrder
+      summary: Delete an order
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '204': { description: Deleted }
+  /sales-orders/{id}/approve:
+    post:
+      tags: [Sales Orders]
+      operationId: approveSalesOrder
+      summary: Approve (confirm) a Draft order
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Approved, content: { application/json: { schema: { $ref: '#/components/schemas/SalesOrder' } } } }
+        '409': { description: Order is not in Draft status }
+  /products:
+    get:
+      tags: [Products]
+      operationId: searchProducts
+      summary: Search products by name or SKU
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: Products
+          content:
+            application/json:
+              schema: { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/Product' } } } }
+  /products/{sku}/stock:
+    get:
+      tags: [Products]
+      operationId: getProductStock
+      summary: Stock of one SKU, optionally for one warehouse
+      parameters:
+        - { name: sku, in: path, required: true, schema: { type: string } }
+        - { name: warehouse, in: query, schema: { type: string }, description: warehouseCode e.g. HN01 }
+      responses:
+        '200':
+          description: Stock levels
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sku: { type: string }
+                  levels: { type: array, items: { type: object, properties: { warehouse: { type: string }, qty: { type: integer } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /invoices/{id}/attachments:
+    post:
+      tags: [Invoices]
+      operationId: uploadInvoiceAttachment
+      summary: Upload a file to an invoice
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          multipart/form-data:
+            schema: { type: object, properties: { file: { type: string, format: binary } } }
+      responses:
+        '201': { description: Uploaded }
+  /reports/export:
+    get:
+      tags: [Reports]
+      operationId: exportReport
+      summary: Export the sales report as a file
+      responses:
+        '200':
+          description: CSV file
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer }
+  responses:
+    Unauthorized: { description: Missing or invalid token }
+    NotFound: { description: Resource not found }
+  schemas:
+    Customer:
+      type: object
+      properties:
+        code: { type: string }
+        name: { type: string }
+        phone: { type: string }
+    OrderLine:
+      type: object
+      required: [sku, qty]
+      properties:
+        sku: { type: string }
+        qty: { type: integer, minimum: 1 }
+        price: { type: integer, description: Unit price in VND }
+    SalesOrder:
+      type: object
+      properties:
+        id: { type: string }
+        customerCode: { type: string }
+        status: { type: string, enum: [Draft, Confirmed, Shipped] }
+        lines: { type: array, items: { $ref: '#/components/schemas/OrderLine' } }
+        total: { type: integer }
+    Product:
+      type: object
+      properties:
+        sku: { type: string }
+        name: { type: string }
+        unit: { type: string }

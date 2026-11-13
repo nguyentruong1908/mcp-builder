@@ -1,0 +1,285 @@
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Impact {
+  read
+  write
+  side_effect
+  destructive
+}
+
+enum VersionStatus {
+  draft
+  released
+  deprecated
+}
+
+enum BuildStatus {
+  queued
+  running
+  succeeded
+  failed
+  cancelled
+}
+
+enum QaStatus {
+  pass
+  fail
+  blocked
+  not_run
+}
+
+enum AuthType {
+  none
+  api_key
+  bearer
+}
+
+model Project {
+  id          String    @id @default(cuid())
+  name        String
+  slug        String    @unique
+  description String    @default("")
+  owner       String    @default("system")
+  outputs     Json      @default("{\"mcp\":true,\"cli\":true}")
+  generation  Json? // project override of the generation profile (GenerationProfileDto)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  archivedAt  DateTime?
+
+  specs       SpecSnapshot[]
+  testCases   TestCase[]
+  context     ProjectContext?
+  tools       ToolDefinition[]
+  connections Connection[]
+  versions    Version[]
+  builds      Build[]
+}
+
+model SpecSnapshot {
+  id              String   @id @default(cuid())
+  projectId       String
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  source          String // url | upload
+  sourceUrl       String?
+  filename        String?
+  raw             String
+  sha256          String
+  oasVersion      String
+  apiVersion      String
+  title           String
+  operations      Json // NormalizedOperation[]
+  issues          Json // SpecIssue[]
+  securitySchemes Json
+  servers         Json
+  createdAt       DateTime @default(now())
+
+  versions Version[]
+
+  @@index([projectId, createdAt])
+}
+
+model ProjectContext {
+  projectId       String   @id
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  purpose         String   @default("")
+  sampleTasks     String   @default("")
+  businessRules   String   @default("")
+  dataFormats     String   @default("")
+  accessScope     String   @default("")
+  impacts         String[] @default([])
+  expectedResults String   @default("")
+  freeform        String   @default("")
+  glossary        Json     @default("[]")
+  updatedAt       DateTime @updatedAt
+}
+
+model ToolDefinition {
+  id                String   @id @default(cuid())
+  projectId         String
+  project           Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  method            String
+  path              String
+  tag               String   @default("default")
+  operationId       String?
+  name              String
+  description       String   @default("")
+  impact            Impact   @default(read)
+  requireConfirm    Boolean  @default(false)
+  selected          Boolean  @default(false)
+  unsupportedReason String?
+  inputSchema       Json
+  params            Json // ToolParam[]
+  bodyWhole         Boolean  @default(false) // request body is not an object: passed whole as the `body` argument
+  responseSchema    Json?
+  present           Boolean  @default(true) // false when the operation disappeared from the current spec
+  updatedAt         DateTime @updatedAt
+
+  @@unique([projectId, method, path])
+}
+
+model Connection {
+  id         String   @id @default(cuid())
+  projectId  String
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name       String
+  baseUrl    String
+  authType   AuthType @default(none)
+  authHeader String   @default("X-Api-Key")
+  secretRef  String   @default("")
+  allowWrite Boolean  @default(false)
+  agentAccess String  @default("read_only") // read_only | write | write_destructive (agent eval on this env)
+  useForQa   Boolean  @default(false)
+  lastCheck  Json?
+  createdAt  DateTime @default(now())
+
+  @@unique([projectId, name])
+}
+
+model Version {
+  id              String        @id @default(cuid())
+  projectId       String
+  project         Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  number          String
+  status          VersionStatus @default(draft)
+  apiVersion      String        @default("")
+  specSnapshotId  String?
+  specSnapshot    SpecSnapshot? @relation(fields: [specSnapshotId], references: [id])
+  contextSnapshot Json?
+  toolsSnapshot   Json?
+  changelog       String        @default("")
+  createdAt       DateTime      @default(now())
+  releasedAt      DateTime?
+  deprecatedAt    DateTime?
+
+  builds Build[]
+
+  @@unique([projectId, number])
+}
+
+model Build {
+  id                  String      @id @default(cuid())
+  seq                 Int         @unique @default(autoincrement())
+  kind                String      @default("export") // export | qa (standalone QA run on sourceBuild's code)
+  sourceBuildId       String?
+  sourceBuildLabel    String?
+  toolsSnapshot       Json? // tool definitions the generated code was built from
+  projectId           String
+  project             Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  versionId           String
+  version             Version     @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  status              BuildStatus @default(queued)
+  stage               String?
+  stages              Json        @default("{\"spec\":\"idle\",\"codex\":\"idle\",\"build\":\"idle\",\"qa\":\"idle\",\"package\":\"idle\"}")
+  runIntegration      Boolean     @default(true)
+  runAgentEval        Boolean     @default(true)
+  packageVerified     Boolean?
+  integrationVerified String?
+  repairRounds        Int         @default(0)
+  qaRepairRounds      Int         @default(0)
+  generation          Json? // EffectiveGeneration frozen at build start
+  inputTokens         Int         @default(0)
+  cachedInputTokens   Int         @default(0)
+  outputTokens        Int         @default(0)
+  costUsd             Float       @default(0)
+  provenance          Json        @default("{}")
+  limits              Json        @default("{}")
+  codexThreadId       String?
+  error               String?
+  cancelRequested     Boolean     @default(false)
+  triggeredBy         String      @default("system")
+  createdAt           DateTime    @default(now())
+  startedAt           DateTime?
+  finishedAt          DateTime?
+
+  logs      BuildLog[]
+  qaResults QaResult[]
+  artifacts Artifact[]
+
+  @@index([status, createdAt])
+  @@index([projectId, createdAt])
+}
+
+model BuildLog {
+  id      Int      @id @default(autoincrement())
+  buildId String
+  build   Build    @relation(fields: [buildId], references: [id], onDelete: Cascade)
+  ts      DateTime @default(now())
+  level   String
+  stage   String
+  message String
+
+  @@index([buildId, id])
+}
+
+model QaResult {
+  id       String   @id @default(cuid())
+  buildId  String
+  build    Build    @relation(fields: [buildId], references: [id], onDelete: Cascade)
+  layer    String
+  tool     String?
+  name     String
+  status   QaStatus
+  detail   String   @default("")
+  evidence Json?
+
+  @@index([buildId])
+}
+
+model Artifact {
+  id        String   @id @default(cuid())
+  buildId   String
+  build     Build    @relation(fields: [buildId], references: [id], onDelete: Cascade)
+  kind      String
+  filename  String
+  path      String
+  sha256    String
+  size      Int
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id     String   @id @default(cuid())
+  at     DateTime @default(now())
+  actor  String
+  action String
+  target String
+  meta   Json?
+
+  @@index([at])
+}
+
+model Setting {
+  key   String @id
+  value Json
+}
+
+model TestCase {
+  id             String   @id @default(cuid())
+  projectId      String
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  kind           String // tool_call | agent_task
+  name           String
+  enabled        Boolean  @default(true)
+  tool           String?
+  args           Json?
+  target         String   @default("mock") // mock | live
+  mockResponse   Json?
+  expect         Json     @default("{}")
+  steps          Json     @default("[]") // TestStep[] for kind tool_steps
+  task           String?
+  expectedTools  String[] @default([])
+  answerContains String[] @default([])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([projectId])
+}

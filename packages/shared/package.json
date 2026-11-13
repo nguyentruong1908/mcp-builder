@@ -1,0 +1,7 @@
+{
+  "name": "@mcp-factory/shared",
+  "version": "0.1.0",
+  "private": true,
+  "types": "src/index.ts",
+  "main": "src/index.ts"
+}
