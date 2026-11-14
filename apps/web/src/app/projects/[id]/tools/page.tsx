@@ -9,6 +9,7 @@ import { api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { cn, copyText, impactMeta } from '@/lib/utils';
 import { Badge, Card, EmptyState, Field, InlineError, Loaded, MethodBadge, PageHeader, Spinner, Switch, Tabs } from '@/components/ui';
+import { usePerm } from '@/lib/perms';
 import { useToast } from '@/components/toast';
 
 type Filter = 'all' | 'selected' | 'write';
@@ -17,6 +18,8 @@ type DetailTab = 'def' | 'schema' | 'json';
 export default function ToolDesignerPage() {
   const { id } = useParams<{ id: string }>();
   const toast = useToast();
+  const edit = usePerm('tools.edit');
+  const projEdit = usePerm('project.edit');
   const tools = useApi(() => api.tools(id), [id]);
   const project = useApi(() => api.project(id), [id]);
   const [curId, setCurId] = useState<string | null>(null);
@@ -69,8 +72,8 @@ export default function ToolDesignerPage() {
       {project.data && (
         <Card className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-3 px-5 py-3">
           <span className="text-xs font-medium text-muted-foreground">Outputs</span>
-          <label className="flex items-center gap-2 text-sm"><Switch label="MCP server" checked={project.data.outputs.mcp} onChange={(v) => setOutputs({ ...project.data!.outputs, mcp: v })} />MCP server (stdio / HTTP)</label>
-          <label className="flex items-center gap-2 text-sm"><Switch label="CLI" checked={project.data.outputs.cli} onChange={(v) => setOutputs({ ...project.data!.outputs, cli: v })} />CLI</label>
+          <label className="flex items-center gap-2 text-sm"><Switch label="MCP server" disabled={!projEdit.ok} checked={project.data.outputs.mcp} onChange={(v) => setOutputs({ ...project.data!.outputs, mcp: v })} />MCP server (stdio / HTTP)</label>
+          <label className="flex items-center gap-2 text-sm"><Switch label="CLI" disabled={!projEdit.ok} checked={project.data.outputs.cli} onChange={(v) => setOutputs({ ...project.data!.outputs, cli: v })} />CLI</label>
           <span className="ml-auto text-xs text-muted-foreground">Runtime: Node.js · npm</span>
         </Card>
       )}
@@ -101,7 +104,7 @@ export default function ToolDesignerPage() {
                     {g.items.map((t) => (
                       <div key={t.id} onClick={() => setCurId(t.id)}
                         className={cn('flex cursor-pointer items-center gap-3 border-b px-4 py-2.5 transition-colors', cur?.id === t.id ? 'bg-brand/10 shadow-[inset_2px_0_0_var(--brand)]' : 'hover:bg-muted/50', t.unsupportedReason && 'opacity-60')}>
-                        <input type="checkbox" className="size-4 accent-[var(--brand)]" checked={t.selected} disabled={!!t.unsupportedReason}
+                        <input type="checkbox" className="size-4 accent-[var(--brand)]" checked={t.selected} disabled={!!t.unsupportedReason || !edit.ok} title={edit.title}
                           onClick={(e) => e.stopPropagation()} onChange={(e) => patch(t, { selected: e.target.checked })} aria-label={`Select ${t.method} ${t.path}`} />
                         <MethodBadge method={t.method} />
                         <button className="min-w-0 flex-1 text-left" onClick={() => setCurId(t.id)}>
@@ -115,7 +118,7 @@ export default function ToolDesignerPage() {
                 ))}
               </div>
             </Card>
-            {cur && <ToolDetail key={cur.id} tool={cur} onPatch={(input) => patch(cur, input)} />}
+            {cur && <ToolDetail key={cur.id} tool={cur} canEdit={edit.ok} denied={edit.title} onPatch={(input) => patch(cur, input)} />}
           </div>
         )}
       </Loaded>
@@ -123,7 +126,7 @@ export default function ToolDesignerPage() {
   );
 }
 
-function ToolDetail({ tool, onPatch }: { tool: ToolDto; onPatch: (input: UpdateToolInput) => Promise<boolean> }) {
+function ToolDetail({ tool, onPatch, canEdit, denied }: { tool: ToolDto; canEdit: boolean; denied?: string; onPatch: (input: UpdateToolInput) => Promise<boolean> }) {
   const toast = useToast();
   const [tab, setTab] = useState<DetailTab>('def');
   const [draft, setDraft] = useState({ name: tool.name, description: tool.description, impact: tool.impact, requireConfirm: tool.requireConfirm });
@@ -163,7 +166,7 @@ function ToolDetail({ tool, onPatch }: { tool: ToolDto; onPatch: (input: UpdateT
         </div>
         <label className="flex items-center gap-2 text-xs font-medium">
           {tool.selected ? 'Included' : 'Not included'}
-          <Switch label="Include in tool set" checked={tool.selected} onChange={(v) => onPatch({ selected: v })} />
+          <Switch label="Include in tool set" disabled={!canEdit} checked={tool.selected} onChange={(v) => onPatch({ selected: v })} />
         </label>
       </div>
       <Tabs className="px-3" value={tab} onChange={setTab} tabs={[{ id: 'def', label: 'Definition' }, { id: 'schema', label: 'Input schema' }, { id: 'json', label: 'MCP JSON' }]} />
@@ -171,16 +174,16 @@ function ToolDetail({ tool, onPatch }: { tool: ToolDto; onPatch: (input: UpdateT
         {tab === 'def' && (
           <div className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Tool name (MCP)">{(i) => <input id={i} className={cn('input font-mono text-xs', !nameOk && 'border-danger')} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />}</Field>
+              <Field label="Tool name (MCP)">{(i) => <input id={i} disabled={!canEdit} title={denied} className={cn('input font-mono text-xs', !nameOk && 'border-danger')} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />}</Field>
               <div><div className="label">CLI command</div><div className="input items-center bg-muted/40 font-mono text-xs text-muted-foreground">{draft.name.replace(/_/g, '-')}</div></div>
             </div>
             <Field label="Description for agents" hint="Agents rely on this to choose the tool. Say when to use it and when not to.">
-              {(i) => <textarea id={i} className="textarea" value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} />}
+              {(i) => <textarea id={i} disabled={!canEdit} title={denied} className="textarea" value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} />}
             </Field>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Impact" hint="Confirmed by you, never inferred from the HTTP method.">
                 {(i) => (
-                  <select id={i} className="input" value={draft.impact} onChange={(e) => setDraft({ ...draft, impact: e.target.value as Impact })}>
+                  <select id={i} disabled={!canEdit} title={denied} className="input" value={draft.impact} onChange={(e) => setDraft({ ...draft, impact: e.target.value as Impact })}>
                     <option value="read">Read</option>
                     <option value="write">Write data</option>
                     <option value="side_effect">Side effect (email, approval…)</option>
@@ -190,7 +193,7 @@ function ToolDetail({ tool, onPatch }: { tool: ToolDto; onPatch: (input: UpdateT
               </Field>
               <div>
                 <div className="label">Confirm before calling</div>
-                <label className="flex h-9 items-center gap-2 text-sm"><Switch label="Confirm before calling" checked={draft.requireConfirm} onChange={(v) => setDraft({ ...draft, requireConfirm: v })} />Ask agents to confirm with the user</label>
+                <label className="flex h-9 items-center gap-2 text-sm"><Switch label="Confirm before calling" disabled={!canEdit} checked={draft.requireConfirm} onChange={(v) => setDraft({ ...draft, requireConfirm: v })} />Ask agents to confirm with the user</label>
               </div>
             </div>
             {draft.impact !== 'read' && !draft.requireConfirm && (
@@ -199,7 +202,7 @@ function ToolDetail({ tool, onPatch }: { tool: ToolDto; onPatch: (input: UpdateT
             <InlineError error={err} />
             <div className="flex justify-end gap-2">
               <button className="btn btn-ghost" disabled={!dirty || busy} onClick={() => setDraft({ name: tool.name, description: tool.description, impact: tool.impact, requireConfirm: tool.requireConfirm })}>Revert</button>
-              <button className="btn btn-primary" disabled={!dirty || busy} onClick={save}>{busy ? <Spinner /> : <Check className="size-4" />}Save</button>
+              <button className="btn btn-primary" disabled={!dirty || busy || !canEdit} title={denied} onClick={save}>{busy ? <Spinner /> : <Check className="size-4" />}Save</button>
             </div>
           </div>
         )}

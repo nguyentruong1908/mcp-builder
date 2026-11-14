@@ -10,11 +10,13 @@ import { useApi } from '@/lib/use-api';
 import { deploymentStatusMeta, fmtDate, impactMeta } from '@/lib/utils';
 import { Badge, Card, CardHeader, EmptyState, InlineError, Loaded, PageHeader, Spinner, Tabs } from '@/components/ui';
 import { CopyButton, DeployDialog, TokenBox, takePendingDeployResult } from '@/components/deploy-dialog';
+import { usePerm } from '@/lib/perms';
 import { useToast } from '@/components/toast';
 
 export default function DeployPage() {
   const { id } = useParams<{ id: string }>();
   const toast = useToast();
+  const perm = usePerm('deploy.manage');
   const q = useApi(() => api.deployment(id), [id]);
   const [dialog, setDialog] = useState(false);
   // The bearer token is only known right after deploy/rotate; kept in React state, never persisted.
@@ -60,13 +62,13 @@ export default function DeployPage() {
   return (
     <>
       <PageHeader title="Deploy" description="Optional: run the packaged MCP server on this platform, or download the package from Versions & Exports as before."
-        actions={dep && <button className="btn btn-primary btn-sm" onClick={() => setDialog(true)}><Rocket className="size-3.5" />Redeploy</button>} />
+        actions={dep && <button className="btn btn-primary btn-sm" disabled={!perm.ok} title={perm.title} onClick={() => setDialog(true)}><Rocket className="size-3.5" />Redeploy</button>} />
       <Loaded q={q}>
         {(d) => !d ? (
           <Card>
             <EmptyState icon={<Rocket className="size-5" />} title="Not deployed"
               description="Deploying runs the packaged MCP server on this platform behind an authenticated HTTPS endpoint, so agents can connect without installing anything. It is optional: you can keep downloading the package from Versions & Exports."
-              action={<button className="btn btn-primary" onClick={() => setDialog(true)}><Rocket className="size-4" />Deploy a build</button>} />
+              action={<button className="btn btn-primary" disabled={!perm.ok} title={perm.title} onClick={() => setDialog(true)}><Rocket className="size-4" />Deploy a build</button>} />
           </Card>
         ) : (
           <div className="space-y-4">
@@ -86,6 +88,7 @@ export default function DeployPage() {
 }
 
 function DeploymentCard({ d, busy, onAct }: { d: DeploymentDto; busy: string | null; onAct: (k: 'start' | 'stop' | 'rotate' | 'remove') => void }) {
+  const perm = usePerm('deploy.manage');
   const meta = deploymentStatusMeta[d.status];
   const live = d.status === 'running' || d.status === 'starting';
   return (
@@ -110,10 +113,10 @@ function DeploymentCard({ d, busy, onAct }: { d: DeploymentDto; busy: string | n
         {d.lastError && <InlineError error={d.lastError} />}
         <div className="flex flex-wrap gap-2 border-t pt-4">
           {live
-            ? <button className="btn btn-outline btn-sm" disabled={!!busy} onClick={() => onAct('stop')}>{busy === 'stop' ? <Spinner className="size-3.5" /> : <Square className="size-3.5" />}Stop</button>
-            : <button className="btn btn-outline btn-sm" disabled={!!busy} onClick={() => onAct('start')}>{busy === 'start' ? <Spinner className="size-3.5" /> : <Play className="size-3.5" />}Start</button>}
-          <button className="btn btn-outline btn-sm" disabled={!!busy} onClick={() => onAct('rotate')}>{busy === 'rotate' ? <Spinner className="size-3.5" /> : <KeyRound className="size-3.5" />}Rotate token</button>
-          <button className="btn btn-danger btn-sm ml-auto" disabled={!!busy} onClick={() => onAct('remove')}>{busy === 'remove' ? <Spinner className="size-3.5" /> : <Trash2 className="size-3.5" />}Remove</button>
+            ? <button className="btn btn-outline btn-sm" disabled={!!busy || !perm.ok} title={perm.title} onClick={() => onAct('stop')}>{busy === 'stop' ? <Spinner className="size-3.5" /> : <Square className="size-3.5" />}Stop</button>
+            : <button className="btn btn-outline btn-sm" disabled={!!busy || !perm.ok} title={perm.title} onClick={() => onAct('start')}>{busy === 'start' ? <Spinner className="size-3.5" /> : <Play className="size-3.5" />}Start</button>}
+          <button className="btn btn-outline btn-sm" disabled={!!busy || !perm.ok} title={perm.title} onClick={() => onAct('rotate')}>{busy === 'rotate' ? <Spinner className="size-3.5" /> : <KeyRound className="size-3.5" />}Rotate token</button>
+          <button className="btn btn-danger btn-sm ml-auto" disabled={!!busy || !perm.ok} title={perm.title} onClick={() => onAct('remove')}>{busy === 'remove' ? <Spinner className="size-3.5" /> : <Trash2 className="size-3.5" />}Remove</button>
         </div>
       </div>
     </Card>

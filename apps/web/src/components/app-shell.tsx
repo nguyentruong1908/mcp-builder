@@ -5,12 +5,13 @@ import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import {
   BookOpen, ChevronRight, ChevronsUpDown, FileCode2, Gauge, Hammer, LayoutDashboard, Loader2, LogOut, Menu, Moon, Package, Play, Plug, Plus, Rocket,
-  Server, Settings2, ShieldCheck, Sun, UserRound, Wrench,
+  Server, Settings2, ShieldCheck, Sun, UserRound, Users, Wrench,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { cn, initials, isActive } from '@/lib/utils';
-import { MeProvider, useMe } from '@/lib/auth';
+import { MeProvider, hasWorkspacePerm, useMe } from '@/lib/auth';
+import { ProjectPermsCtx, useProjectPermissions } from '@/lib/perms';
 import { LogoMark } from './logo';
 import { ExportDialog } from './export-dialog';
 import { ToastProvider } from './toast';
@@ -25,7 +26,10 @@ const projectNav = [
   { seg: '/qa', label: 'QA', icon: ShieldCheck },
   { seg: '/versions', label: 'Versions & Exports', icon: Package },
   { seg: '/deploy', label: 'Deploy', icon: Rocket },
+  { seg: '/members', label: 'Members', icon: Users },
 ];
+
+export { useProjectPermissions };
 
 function pageTitle(pathname: string) {
   if (pathname === '/') return 'Dashboard';
@@ -61,10 +65,11 @@ function Shell({ children }: { children: ReactNode }) {
 
   const p = project.data && project.data.id === projectId ? project.data : null;
   const running = p?.latestBuild && isActive(p.latestBuild.status) ? p.latestBuild : null;
+  const perms = p?.myPermissions ?? [];
   const base = projectId ? `/projects/${projectId}` : '';
 
   return (
-    <ToastProvider>
+    <ToastProvider><ProjectPermsCtx.Provider value={perms}>
       <div className="flex min-h-screen">
         {mobileNav && <div className="fixed inset-0 z-30 bg-black/50 md:hidden" onClick={() => setMobileNav(false)} aria-hidden />}
         <aside className={cn('top-0 h-screen w-64 shrink-0 flex-col border-r bg-sidebar md:sticky md:flex', mobileNav ? 'fixed inset-y-0 left-0 z-40 flex shadow-2xl' : 'hidden')}>
@@ -124,20 +129,21 @@ function Shell({ children }: { children: ReactNode }) {
             {projectId && (running ? (
               <Link className="btn btn-primary" href={`${base}/builds/${running.id}`}><Spinner />Exporting…</Link>
             ) : (
-              <button className="btn btn-primary" disabled={!p || !!p.archivedAt} onClick={() => setExportOpen(true)}><Play className="size-4" />Export</button>
+              perms.includes('builds.run') && <button className="btn btn-primary" disabled={!p || !!p.archivedAt} onClick={() => setExportOpen(true)}><Play className="size-4" />Export</button>
             ))}
           </header>
           <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 md:px-6 md:py-8">{children}</main>
         </div>
       </div>
       {projectId && <ExportDialog projectId={projectId} open={exportOpen} onClose={() => setExportOpen(false)} />}
-    </ToastProvider>
+    </ProjectPermsCtx.Provider></ToastProvider>
   );
 }
 
 function ProjectSwitcher({ current }: { current: { id: string; name: string; latestDraft: { number: string } | null; currentRelease: { number: string } | null } | null }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const canCreate = hasWorkspacePerm(useMe().me, 'projects.create');
   const list = useApi(() => (open ? api.projects() : Promise.resolve(null)), [open]);
 
   useEffect(() => {
@@ -174,9 +180,9 @@ function ProjectSwitcher({ current }: { current: { id: string; name: string; lat
               </Link>
             ))}
           </div>
-          <Link href="/projects/new" onClick={() => setOpen(false)} className="flex items-center gap-2 border-t px-3 py-2 text-[13px] text-muted-foreground hover:bg-muted hover:text-foreground">
+          {canCreate && <Link href="/projects/new" onClick={() => setOpen(false)} className="flex items-center gap-2 border-t px-3 py-2 text-[13px] text-muted-foreground hover:bg-muted hover:text-foreground">
             <Plus className="size-3.5" />New project
-          </Link>
+          </Link>}
         </div>
       )}
     </div>

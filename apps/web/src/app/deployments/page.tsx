@@ -9,6 +9,7 @@ import { useApi } from '@/lib/use-api';
 import { deploymentStatusMeta, fmtDate } from '@/lib/utils';
 import { Badge, Card, EmptyState, InlineError, Loaded, PageHeader, Spinner, Tabs } from '@/components/ui';
 import { CopyButton, DeployDialog, TokenBox } from '@/components/deploy-dialog';
+import { deniedTitle, permLabel } from '@/lib/perms';
 import { useToast } from '@/components/toast';
 
 type Filter = 'all' | DeploymentStatus | 'none';
@@ -110,12 +111,12 @@ export default function DeploymentsPage() {
                           <td>
                             <div className="flex justify-end gap-1">
                               {d.status === 'running' || d.status === 'starting'
-                                ? <IconAction label="Stop" busy={busy === `${d.id}:stop`} disabled={!!busy} onClick={() => act('stop', d)} icon={<Square className="size-3.5" />} />
-                                : <IconAction label="Start" busy={busy === `${d.id}:start`} disabled={!!busy} onClick={() => act('start', d)} icon={<Play className="size-3.5" />} />}
-                              <IconAction label="Redeploy" disabled={!!busy || !!p.archivedAt} onClick={() => setDeployFor(p)} icon={<Rocket className="size-3.5" />} />
-                              <IconAction label="Rotate token" busy={busy === `${d.id}:rotate`} disabled={!!busy} onClick={() => act('rotate', d)} icon={<KeyRound className="size-3.5" />} />
+                                ? <IconAction label="Stop" busy={busy === `${d.id}:stop`} disabled={!!busy || !d.canManage} denied={!d.canManage} onClick={() => act('stop', d)} icon={<Square className="size-3.5" />} />
+                                : <IconAction label="Start" busy={busy === `${d.id}:start`} disabled={!!busy || !d.canManage} denied={!d.canManage} onClick={() => act('start', d)} icon={<Play className="size-3.5" />} />}
+                              <IconAction label="Redeploy" denied={!d.canManage} disabled={!!busy || !!p.archivedAt || !d.canManage} onClick={() => setDeployFor(p)} icon={<Rocket className="size-3.5" />} />
+                              <IconAction label="Rotate token" busy={busy === `${d.id}:rotate`} disabled={!!busy || !d.canManage} denied={!d.canManage} onClick={() => act('rotate', d)} icon={<KeyRound className="size-3.5" />} />
                               <Link className="btn btn-ghost btn-icon size-8" href={`/projects/${p.id}/deploy`} title="Manage: agent setup, tools, logs" aria-label={`Manage ${p.name}`}><ExternalLink className="size-3.5" /></Link>
-                              <IconAction label="Remove" danger busy={busy === `${d.id}:remove`} disabled={!!busy} onClick={() => act('remove', d)} icon={<Trash2 className="size-3.5" />} />
+                              <IconAction label="Remove" danger busy={busy === `${d.id}:remove`} disabled={!!busy || !d.canManage} denied={!d.canManage} onClick={() => act('remove', d)} icon={<Trash2 className="size-3.5" />} />
                             </div>
                           </td>
                         </tr>
@@ -127,7 +128,7 @@ export default function DeploymentsPage() {
                             {p.latestBuild?.packageVerified ? `Latest build ${p.latestBuild.label} is Package verified and can be deployed.` : 'Needs a Package verified build before it can be deployed.'}
                           </td>
                           <td className="text-right">
-                            <button className="btn btn-outline btn-sm" disabled={!!p.archivedAt} onClick={() => setDeployFor(p)}><Rocket className="size-3.5" />Deploy</button>
+                            <button className="btn btn-outline btn-sm" disabled={!!p.archivedAt || !p.myPermissions.includes('deploy.manage')} title={deniedTitle(p.myPermissions.includes('deploy.manage'), permLabel('deploy.manage'))} onClick={() => setDeployFor(p)}><Rocket className="size-3.5" />Deploy</button>
                           </td>
                         </tr>
                       ))}
@@ -151,9 +152,9 @@ function matches({ dep }: Row, f: Filter): boolean {
   return dep?.status === f;
 }
 
-function IconAction({ label, icon, onClick, disabled, busy, danger }: { label: string; icon: React.ReactNode; onClick: () => void; disabled?: boolean; busy?: boolean; danger?: boolean }) {
+function IconAction({ label, icon, onClick, disabled, busy, danger, denied }: { label: string; icon: React.ReactNode; onClick: () => void; disabled?: boolean; busy?: boolean; danger?: boolean; denied?: boolean }) {
   return (
-    <button className={`btn btn-ghost btn-icon size-8 ${danger ? 'text-danger hover:text-danger' : ''}`} title={label} aria-label={label} disabled={disabled} onClick={onClick}>
+    <button className={`btn btn-ghost btn-icon size-8 ${danger ? 'text-danger hover:text-danger' : ''}`} title={denied ? `Requires permission ${permLabel('deploy.manage')}` : label} aria-label={label} disabled={disabled} onClick={onClick}>
       {busy ? <Spinner className="size-3.5" /> : icon}
     </button>
   );

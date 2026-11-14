@@ -9,6 +9,7 @@ import { useApi } from '@/lib/use-api';
 import { cn, fmtDate, shortHash } from '@/lib/utils';
 import { Badge, Card, CardHeader, EmptyState, Field, InlineError, Loaded, PageHeader, Spinner, Tabs } from '@/components/ui';
 import { SpecDiffView } from '@/components/spec-diff';
+import { usePerm } from '@/lib/perms';
 import { useToast } from '@/components/toast';
 
 type Tab = 'swagger' | 'context' | 'glossary' | 'conflicts';
@@ -58,6 +59,7 @@ export default function ApiContextPage() {
 function SwaggerTab({ projectId, onImported }: { projectId: string; onImported: () => void }) {
   const q = useApi(() => api.spec(projectId), [projectId]);
   const toast = useToast();
+  const spec = usePerm('spec.edit');
   const [url, setUrl] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -90,15 +92,15 @@ function SwaggerTab({ projectId, onImported }: { projectId: string; onImported: 
             <form className="flex flex-col gap-2 sm:flex-row" onSubmit={(e) => { e.preventDefault(); if (url.trim()) doImport({ url: url.trim() }); }}>
               <div className="relative flex-1">
                 <LinkIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <input className="input pl-9 font-mono text-xs" type="url" placeholder="https://api.example.com/openapi.yaml" value={url} onChange={(e) => setUrl(e.target.value)} aria-label="Swagger URL" />
+                <input className="input pl-9 font-mono text-xs" disabled={!spec.ok} title={spec.title} type="url" placeholder="https://api.example.com/openapi.yaml" value={url} onChange={(e) => setUrl(e.target.value)} aria-label="Swagger URL" />
               </div>
-              <button className="btn btn-outline" disabled={busy || !url.trim()}>{busy ? <Spinner /> : <FileCode2 className="size-4" />}Fetch</button>
+              <button className="btn btn-outline" disabled={busy || !url.trim() || !spec.ok} title={spec.title}>{busy ? <Spinner /> : <FileCode2 className="size-4" />}Fetch</button>
             </form>
-            <label className={cn('mt-3 flex flex-col items-center justify-center gap-1 rounded-lg border border-dashed py-6 text-center transition-colors hover:bg-muted/40', busy ? 'pointer-events-none opacity-60' : 'cursor-pointer')}>
+            <label className={cn('mt-3 flex flex-col items-center justify-center gap-1 rounded-lg border border-dashed py-6 text-center transition-colors hover:bg-muted/40', busy || !spec.ok ? 'pointer-events-none opacity-60' : 'cursor-pointer')} title={spec.title}>
               <UploadCloud className="size-5 text-muted-foreground" />
               <span className="text-sm font-medium">Click to upload a spec file</span>
               <span className="text-xs text-muted-foreground">.json, .yaml, .yml · up to 5MB</span>
-              <input type="file" className="sr-only" accept=".json,.yaml,.yml" onChange={onFile} disabled={busy} />
+              <input type="file" className="sr-only" accept=".json,.yaml,.yml" onChange={onFile} disabled={busy || !spec.ok} />
             </label>
             <p className="hint flex items-center gap-1.5"><Shield className="size-3.5" />URL fetches are limited to the server allowlist; external <code className="mono">$ref</code>s are never resolved.</p>
             <div className="mt-3"><InlineError error={err} /></div>
@@ -226,11 +228,12 @@ function useContextForm(projectId: string, onSaved: () => void) {
 }
 
 function SaveBar({ ctx }: { ctx: CtxForm }) {
+  const edit = usePerm('context.edit');
   return (
     <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
       <div className="flex-1"><InlineError error={ctx.err} /></div>
       {ctx.updatedAt && <span className="text-xs text-muted-foreground">Last saved {fmtDate(ctx.updatedAt)}</span>}
-      <button className="btn btn-primary" disabled={ctx.busy || !ctx.form} onClick={ctx.save}>{ctx.busy && <Spinner />}Save context</button>
+      <button className="btn btn-primary" disabled={ctx.busy || !ctx.form || !edit.ok} title={edit.title} onClick={ctx.save}>{ctx.busy && <Spinner />}Save context</button>
     </div>
   );
 }

@@ -5,16 +5,18 @@ import { Activity, Boxes, GitBranch, Plus, ShieldAlert } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { buildStatusMeta, fmtDate, fmtUsd, initials, STAGES, stageLabel, verdictMeta, versionStatusMeta } from '@/lib/utils';
+import { hasWorkspacePerm, useMe } from '@/lib/auth';
 import { Badge, Card, CardHeader, EmptyState, Loaded, PageHeader, Stat } from '@/components/ui';
 
 export default function DashboardPage() {
   const q = useApi(() => api.dashboard(), []);
+  const canCreate = hasWorkspacePerm(useMe().me, 'projects.create');
   return (
     <>
       <PageHeader
         title="Dashboard"
         description="Overview of the agent tool sets in this workspace."
-        actions={<Link href="/projects/new" className="btn btn-outline"><Plus className="size-4" />New Tool Project</Link>}
+        actions={canCreate ? <Link href="/projects/new" className="btn btn-outline"><Plus className="size-4" />New Tool Project</Link> : undefined}
       />
       <Loaded q={q}>
         {(d) => (
@@ -31,7 +33,7 @@ export default function DashboardPage() {
                 <CardHeader title="Tool Projects" description="Current release, latest build and draft" />
                 {d.projects.length === 0 ? (
                   <EmptyState icon={<Boxes className="size-5" />} title="No projects yet" description="Create your first project and import a Swagger spec to get started."
-                    action={<Link href="/projects/new" className="btn btn-primary btn-sm"><Plus className="size-3.5" />New project</Link>} />
+                    action={canCreate ? <Link href="/projects/new" className="btn btn-primary btn-sm"><Plus className="size-3.5" />New project</Link> : undefined} />
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="tbl">

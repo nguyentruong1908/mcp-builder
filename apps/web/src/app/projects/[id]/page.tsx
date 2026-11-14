@@ -9,6 +9,7 @@ import { api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { buildStatusMeta, cn, deploymentStatusMeta, fmtDate, initials, verdictMeta } from '@/lib/utils';
 import { Badge, Card, CardHeader, Field, InlineError, Loaded, Modal, PageHeader, Spinner, Switch } from '@/components/ui';
+import { deniedTitle, permLabel, usePerm } from '@/lib/perms';
 import { useToast } from '@/components/toast';
 import { ProjectGenerationCard } from '@/components/project-generation';
 
@@ -23,6 +24,7 @@ export default function ProjectOverviewPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const toast = useToast();
+  const edit = usePerm('project.edit');
   const q = useApi(() => api.project(id), [id]);
   const [editing, setEditing] = useState(false);
 
@@ -48,8 +50,8 @@ export default function ProjectOverviewPage() {
             }
             description={p.description || 'No description.'}
             actions={<>
-              <button className="btn btn-outline" onClick={() => setEditing(true)}><Pencil className="size-4" />Edit</button>
-              <button className="btn btn-danger" disabled={!!p.archivedAt} onClick={() => archive(p)}><Archive className="size-4" />Archive</button>
+              <button className="btn btn-outline" disabled={!edit.ok} title={edit.title} onClick={() => setEditing(true)}><Pencil className="size-4" />Edit</button>
+              <button className="btn btn-danger" disabled={!!p.archivedAt || !edit.ok} title={edit.title} onClick={() => archive(p)}><Archive className="size-4" />Archive</button>
             </>}
           />
 

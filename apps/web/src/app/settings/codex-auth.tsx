@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Copy, ExternalLink, FileJson, KeyRound, LogOut, MonitorSmartphone, ShieldAlert, TriangleAlert } from 'lucide-react';
 import type { CodexAuthStatus } from '@mcp-builder/shared';
 import { api } from '@/lib/api';
+import { hasWorkspacePerm, useMe } from '@/lib/auth';
+import { deniedTitle, permLabel } from '@/lib/perms';
 import { useApi } from '@/lib/use-api';
 import { fmtDate } from '@/lib/utils';
 import { Badge, Card, CardHeader, Field, InlineError, Loaded, Spinner, Tabs } from '@/components/ui';
@@ -37,6 +39,7 @@ export function CodexAuthPanel() {
 
 function StatusCard({ s, onChange }: { s: CodexAuthStatus; onChange: (s: CodexAuthStatus) => void }) {
   const toast = useToast();
+  const canEdit = hasWorkspacePerm(useMe().me, 'codex.manage');
   const [busy, setBusy] = useState(false);
   async function logout() {
     if (!confirm('Sign Codex out of MCP Builder? New builds will not run until you sign in again.')) return;
@@ -71,7 +74,7 @@ function StatusCard({ s, onChange }: { s: CodexAuthStatus; onChange: (s: CodexAu
       )}
       {s.source === 'auth_file' && (
         <div className="flex justify-end border-t px-5 py-3">
-          <button className="btn btn-danger btn-sm" disabled={busy} onClick={logout}>{busy ? <Spinner /> : <LogOut className="size-3.5" />}Sign out</button>
+          <button className="btn btn-danger btn-sm" disabled={busy || !canEdit} title={deniedTitle(canEdit, permLabel('codex.manage'))} onClick={logout}>{busy ? <Spinner /> : <LogOut className="size-3.5" />}Sign out</button>
         </div>
       )}
     </Card>
@@ -80,6 +83,7 @@ function StatusCard({ s, onChange }: { s: CodexAuthStatus; onChange: (s: CodexAu
 
 function LoginCard({ s, onChange }: { s: CodexAuthStatus; onChange: (s: CodexAuthStatus) => void }) {
   const [method, setMethod] = useState<Method>('device');
+  const canEdit = hasWorkspacePerm(useMe().me, 'codex.manage');
   return (
     <Card>
       <CardHeader title={s.configured ? 'Switch Codex account' : 'Sign in to Codex'} description="Credentials are stored in MCP Builder's data volume (CODEX_HOME), never in the database, and are never shown again." />
@@ -90,11 +94,11 @@ function LoginCard({ s, onChange }: { s: CodexAuthStatus; onChange: (s: CodexAut
           { id: 'upload', label: <span className="inline-flex items-center gap-1.5"><FileJson className="size-3.5" />auth.json</span> },
         ]} />
       </div>
-      <div className="px-5 pb-5 pt-4">
+      <fieldset disabled={!canEdit} title={deniedTitle(canEdit, permLabel('codex.manage'))} className="min-w-0 border-0 px-5 pb-5 pt-4">
         {method === 'device' && <DeviceLogin s={s} onChange={onChange} />}
         {method === 'apikey' && <ApiKeyLogin onChange={onChange} />}
         {method === 'upload' && <UploadAuth onChange={onChange} />}
-      </div>
+      </fieldset>
     </Card>
   );
 }

@@ -8,6 +8,7 @@ import { api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { cn, fmtDate } from '@/lib/utils';
 import { Badge, Card, CardHeader, EmptyState, Field, InlineError, Loaded, Modal, PageHeader, Spinner, Switch } from '@/components/ui';
+import { usePerm } from '@/lib/perms';
 import { useToast } from '@/components/toast';
 
 const agentAccessLabel: Record<AgentAccess, string> = { read_only: 'Read tools only', write: 'Read + write (no delete)', write_destructive: 'Read + write + delete' };
@@ -18,6 +19,7 @@ const authLabel: Record<AuthType, string> = { none: 'No auth', api_key: 'API key
 export default function ConnectionsPage() {
   const { id } = useParams<{ id: string }>();
   const toast = useToast();
+  const mg = usePerm('connections.manage');
   const q = useApi(() => api.connections(id), [id]);
   const [editing, setEditing] = useState<ConnectionDto | 'new' | null>(null);
   const [testing, setTesting] = useState<string | null>(null);
@@ -42,11 +44,11 @@ export default function ConnectionsPage() {
     <>
       <PageHeader title="Connections"
         description={<>Environments used for testing. MCP Builder stores only secret <b className="text-foreground">references</b> (<code className="mono">env://VAR</code>); real credentials are never packaged into artifacts.</>}
-        actions={<button className="btn btn-outline" onClick={() => setEditing('new')}><Plus className="size-4" />Add environment</button>} />
+        actions={<button className="btn btn-outline" disabled={!mg.ok} title={mg.title} onClick={() => setEditing('new')}><Plus className="size-4" />Add environment</button>} />
       <Loaded q={q}>
         {(list) => list.length === 0 ? (
           <Card><EmptyState icon={<Plug className="size-5" />} title="No environments yet" description="Add a test environment to run integration QA. Without one, integration results are NOT RUN."
-            action={<button className="btn btn-primary btn-sm" onClick={() => setEditing('new')}><Plus className="size-3.5" />Add environment</button>} /></Card>
+            action={<button className="btn btn-primary btn-sm" disabled={!mg.ok} title={mg.title} onClick={() => setEditing('new')}><Plus className="size-3.5" />Add environment</button>} /></Card>
         ) : (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
             {list.map((c) => (
@@ -64,9 +66,9 @@ export default function ConnectionsPage() {
                   {c.lastCheck && <><dt>Last check</dt><dd className="text-xs">{fmtDate(c.lastCheck.at)}{c.lastCheck.status != null && ` · HTTP ${c.lastCheck.status}`}{c.lastCheck.latencyMs != null && ` · ${c.lastCheck.latencyMs}ms`}{c.lastCheck.message && <div className="text-muted-foreground">{c.lastCheck.message}</div>}</dd></>}
                 </dl>
                 <div className="flex gap-2 border-t px-5 py-3">
-                  <button className="btn btn-outline btn-sm" disabled={testing === c.id} onClick={() => test(c)}>{testing === c.id ? <Spinner className="size-3.5" /> : <PlugZap className="size-3.5" />}Test connection</button>
-                  <button className="btn btn-ghost btn-sm" onClick={() => setEditing(c)}><Pencil className="size-3.5" />Edit</button>
-                  <button className="btn btn-ghost btn-sm ml-auto text-danger" onClick={() => remove(c)} aria-label={`Delete ${c.name}`}><Trash2 className="size-3.5" /></button>
+                  <button className="btn btn-outline btn-sm" disabled={testing === c.id || !mg.ok} title={mg.title} onClick={() => test(c)}>{testing === c.id ? <Spinner className="size-3.5" /> : <PlugZap className="size-3.5" />}Test connection</button>
+                  <button className="btn btn-ghost btn-sm" disabled={!mg.ok} title={mg.title} onClick={() => setEditing(c)}><Pencil className="size-3.5" />Edit</button>
+                  <button className="btn btn-ghost btn-sm ml-auto text-danger" disabled={!mg.ok} title={mg.title} onClick={() => remove(c)} aria-label={`Delete ${c.name}`}><Trash2 className="size-3.5" /></button>
                 </div>
               </Card>
             ))}

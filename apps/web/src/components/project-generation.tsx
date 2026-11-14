@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { Badge, Card, CardHeader, InlineError, Loaded, Spinner, Switch } from './ui';
 import { GenerationFields } from './generation-form';
+import { usePerm } from '@/lib/perms';
 import { useToast } from './toast';
 
 const SOURCE_LABEL: Record<string, string> = { project: 'project', workspace: 'workspace', env: 'CODEX_MODEL', default: 'model default' };
@@ -26,6 +27,7 @@ export function EffectiveGenerationSummary({ g }: { g: EffectiveGeneration }) {
 export function ProjectGenerationCard({ projectId }: { projectId: string }) {
   const q = useApi(() => Promise.all([api.projectGeneration(projectId), api.codexModels().catch(() => [])]), [projectId]);
   const toast = useToast();
+  const edit = usePerm('project.edit');
   const [draft, setDraft] = useState<GenerationProfile | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -55,7 +57,7 @@ export function ProjectGenerationCard({ projectId }: { projectId: string }) {
         {([g, models]) => (
           <>
             <CardHeader title="Generation profile" description="Model, reasoning and rules Codex uses to generate this project's adapters"
-              actions={<label className="flex items-center gap-2 text-sm"><Switch checked={draft !== null} onChange={toggle} label="Override for this project" disabled={busy} />Override for this project</label>} />
+              actions={<label className="flex items-center gap-2 text-sm" title={edit.title}><Switch checked={draft !== null} onChange={toggle} label="Override for this project" disabled={busy || !edit.ok} />Override for this project</label>} />
             <div className="space-y-4 px-5 pb-5">
               <EffectiveGenerationSummary g={g.effective} />
               <details className="rounded-md border px-3 py-2">
@@ -71,7 +73,7 @@ export function ProjectGenerationCard({ projectId }: { projectId: string }) {
                     rulesLabel="Extra project rules (appended after the workspace rules)" />
                   <div className="mt-4 flex justify-end gap-2 border-t pt-4">
                     {override && <span className="mr-auto self-center text-xs text-muted-foreground">Override v{override.version}</span>}
-                    <button className="btn btn-primary" disabled={busy} onClick={save}>{busy && <Spinner />}Save override</button>
+                    <button className="btn btn-primary" disabled={busy || !edit.ok} title={edit.title} onClick={save}>{busy && <Spinner />}Save override</button>
                   </div>
                 </div>
               )}

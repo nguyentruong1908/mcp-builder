@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { cn } from '@/lib/utils';
 import { Badge, Card, CardHeader, EmptyState, Field, InlineError, Loaded, Modal, Spinner, Switch } from '@/components/ui';
+import { usePerm } from '@/lib/perms';
 import { useToast } from '@/components/toast';
 
 const CATEGORIES = ['', 'auth', 'not_found', 'conflict', 'rate_limited', 'client', 'server', 'timeout', 'network', 'response', 'input'];
@@ -14,6 +15,7 @@ const splitList = (s: string) => s.split(/[\n,]/).map((x) => x.trim()).filter(Bo
 
 export function TestCases({ projectId }: { projectId: string }) {
   const toast = useToast();
+  const tc_ = usePerm('testcases.manage');
   const q = useApi(() => Promise.all([api.testCases(projectId), api.tools(projectId)]), [projectId]);
   const [editing, setEditing] = useState<TestCaseDto | 'new' | null>(null);
 
@@ -33,7 +35,7 @@ export function TestCases({ projectId }: { projectId: string }) {
         return (
           <Card className="overflow-hidden">
             <CardHeader title="Custom test cases" description="Run on every Export and QA run. A failing test case blocks the Package verified label."
-              actions={<button className="btn btn-primary btn-sm" onClick={() => setEditing('new')}><Plus className="size-3.5" />Add test case</button>} />
+              actions={<button className="btn btn-primary btn-sm" disabled={!tc_.ok} title={tc_.title} onClick={() => setEditing('new')}><Plus className="size-3.5" />Add test case</button>} />
             {cases.length === 0 ? (
               <EmptyState icon={<ListChecks className="size-5" />} title="No test cases yet" description="Add a tool call with an expected result, or a task for the Codex agent to try." />
             ) : (
@@ -43,7 +45,7 @@ export function TestCases({ projectId }: { projectId: string }) {
                   <tbody>
                     {cases.map((tc) => (
                       <tr key={tc.id} className={cn(!tc.enabled && 'opacity-60')}>
-                        <td><Switch checked={tc.enabled} onChange={(v) => toggle(tc, v)} label={`Enable test case ${tc.name}`} /></td>
+                        <td><Switch checked={tc.enabled} onChange={(v) => toggle(tc, v)} label={`Enable test case ${tc.name}`} disabled={!tc_.ok} /></td>
                         <td>{tc.kind === 'tool_call' ? <Badge tone="info"><Wrench className="size-3" />Tool call</Badge> : tc.kind === 'tool_steps' ? <Badge tone="info"><ListOrdered className="size-3" />Multi-step</Badge> : <Badge tone="brand"><Bot className="size-3" />Agent task</Badge>}</td>
                         <td className="font-medium">{tc.name}</td>
                         <td className="max-w-[360px]">
@@ -55,8 +57,8 @@ export function TestCases({ projectId }: { projectId: string }) {
                         </td>
                         <td>{tc.kind !== 'agent_task' ? <Badge tone={tc.target === 'live' ? 'warning' : 'outline'}>{tc.target === 'live' ? 'Live API' : 'Mock'}</Badge> : <span className="text-xs text-muted-foreground">per agent eval</span>}</td>
                         <td className="whitespace-nowrap text-right">
-                          <button className="btn btn-ghost btn-sm" onClick={() => setEditing(tc)} aria-label={`Edit ${tc.name}`}><Pencil className="size-3.5" /></button>
-                          <button className="btn btn-ghost btn-sm text-danger" onClick={() => remove(tc)} aria-label={`Delete ${tc.name}`}><Trash2 className="size-3.5" /></button>
+                          <button className="btn btn-ghost btn-sm" disabled={!tc_.ok} title={tc_.title} onClick={() => setEditing(tc)} aria-label={`Edit ${tc.name}`}><Pencil className="size-3.5" /></button>
+                          <button className="btn btn-ghost btn-sm text-danger" disabled={!tc_.ok} title={tc_.title} onClick={() => remove(tc)} aria-label={`Delete ${tc.name}`}><Trash2 className="size-3.5" /></button>
                         </td>
                       </tr>
                     ))}

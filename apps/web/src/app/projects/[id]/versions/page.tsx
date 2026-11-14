@@ -12,6 +12,7 @@ import { Badge, Card, CardHeader, EmptyState, Loaded, PageHeader, Spinner, Tabs 
 import { BuildBadges } from '@/components/build-badges';
 import { DeployDialog } from '@/components/deploy-dialog';
 import { SpecDiffView } from '@/components/spec-diff';
+import { usePerm } from '@/lib/perms';
 import { useToast } from '@/components/toast';
 
 type InstallTab = 'mcp' | 'http' | 'cli';
@@ -20,6 +21,8 @@ const artifactIcon = { mcp_package: Package, qa_report: FileCheck2, provenance: 
 export default function VersionsPage() {
   const { id } = useParams<{ id: string }>();
   const toast = useToast();
+  const rel = usePerm('versions.release');
+  const dep = usePerm('deploy.manage');
   const versions = useApi(() => api.versions(id), [id]);
   const spec = useApi(() => api.spec(id), [id]);
   const project = useApi(() => api.project(id), [id]);
@@ -66,13 +69,13 @@ export default function VersionsPage() {
                       <td><Badge tone={versionStatusMeta[v.status].tone}>{versionStatusMeta[v.status].label}</Badge>{v.releasedAt && <div className="mt-0.5 text-xs text-muted-foreground">{fmtDate(v.releasedAt)}</div>}</td>
                       <td className="text-right">
                         {v.status === 'draft' && (
-                          <button className="btn btn-outline btn-sm" disabled={busy === v.id || !v.latestBuild?.packageVerified} title={v.latestBuild?.packageVerified ? undefined : 'The latest build must pass Package verified'} onClick={() => act(v, 'release')}>
+                          <button className="btn btn-outline btn-sm" disabled={busy === v.id || !v.latestBuild?.packageVerified || !rel.ok} title={rel.title ?? (v.latestBuild?.packageVerified ? undefined : 'The latest build must pass Package verified')} onClick={() => act(v, 'release')}>
                             {busy === v.id ? <Spinner className="size-3.5" /> : <Rocket className="size-3.5" />}Release
                           </button>
                         )}
-                        {v.status === 'released' && <button className="btn btn-ghost btn-sm" disabled={busy === v.id} onClick={() => act(v, 'deprecate')}>Deprecate</button>}
+                        {v.status === 'released' && <button className="btn btn-ghost btn-sm" disabled={busy === v.id || !rel.ok} title={rel.title} onClick={() => act(v, 'deprecate')}>Deprecate</button>}
                         {v.latestBuild?.packageVerified && v.latestBuild.stages.package === 'ok' && (
-                          <button className="btn btn-ghost btn-sm" onClick={() => setDeployBuild(v.latestBuild!.id)}><Globe className="size-3.5" />Deploy</button>
+                          <button className="btn btn-ghost btn-sm" disabled={!dep.ok} title={dep.title} onClick={() => setDeployBuild(v.latestBuild!.id)}><Globe className="size-3.5" />Deploy</button>
                         )}
                       </td>
                     </tr>
@@ -103,6 +106,7 @@ export default function VersionsPage() {
 
 function Downloads({ buildId, version, slug }: { buildId: string; version: string; slug: string }) {
   const toast = useToast();
+  const dl = usePerm('artifacts.download');
   const b = useApi(() => api.build(buildId), [buildId]);
   const [tab, setTab] = useState<InstallTab>('mcp');
   return (
@@ -127,7 +131,9 @@ function Downloads({ buildId, version, slug }: { buildId: string; version: strin
                     <div key={a.id} className="flex items-center gap-3 rounded-lg border p-3">
                       <span className="flex size-8 items-center justify-center rounded-md bg-muted"><Icon className="size-4" /></span>
                       <div className="min-w-0 flex-1"><div className="truncate text-sm font-medium">{a.filename}</div><div className="truncate font-mono text-[11px] text-muted-foreground">sha256:{shortHash(a.sha256)} · {fmtBytes(a.size)}</div></div>
-                      <a className="btn btn-outline btn-sm" href={absUrl(a.downloadUrl)} download><Download className="size-3.5" />Download</a>
+                      {dl.ok
+                        ? <a className="btn btn-outline btn-sm" href={absUrl(a.downloadUrl)} download><Download className="size-3.5" />Download</a>
+                        : <button className="btn btn-outline btn-sm" disabled title={dl.title}><Download className="size-3.5" />Download</button>}
                     </div>
                   );
                 })}

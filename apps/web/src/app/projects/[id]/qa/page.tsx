@@ -11,6 +11,7 @@ import { cn, fmtDate, isActive, LAYERS, layerMeta, qaMeta, verdictMeta } from '@
 import { Badge, Card, CardHeader, EmptyState, Loaded, PageHeader, Tabs } from '@/components/ui';
 import { BuildBadges } from '@/components/build-badges';
 import { QaRunDialog } from '@/components/qa-run-dialog';
+import { usePerm } from '@/lib/perms';
 import { TestCases } from './test-cases';
 
 export default function QaPage() {
@@ -18,6 +19,7 @@ export default function QaPage() {
   const router = useRouter();
   const search = useSearchParams();
   const buildParam = search.get('build');
+  const qaPerm = usePerm('qa.run');
   const builds = useApi(() => api.builds(id), [id]);
   const withQa = (builds.data ?? []).filter((b) => b.stages.qa !== 'idle');
   const selected = buildParam ?? withQa[0]?.id ?? null;
@@ -33,8 +35,8 @@ export default function QaPage() {
     <>
       <PageHeader title="QA report" description="Verdicts come from tests that actually ran, never from a model-written report."
         actions={withQa.length > 0 && <>
-          <button className="btn btn-primary btn-sm" disabled={!codeBuild || running || sel?.stages.build !== 'ok'}
-            title={running ? 'A build is running' : sel?.stages.build !== 'ok' ? 'The selected build has no compiled code' : undefined}
+          <button className="btn btn-primary btn-sm" disabled={!codeBuild || running || sel?.stages.build !== 'ok' || !qaPerm.ok}
+            title={qaPerm.title ?? running ? 'A build is running' : sel?.stages.build !== 'ok' ? 'The selected build has no compiled code' : undefined}
             onClick={() => setQaOpen(true)}><FlaskConical className="size-3.5" />Run QA</button>
           <select className="input h-8 w-auto text-xs" aria-label="Select build" value={selected ?? ''} onChange={(e) => router.replace(`/projects/${id}/qa?build=${e.target.value}`)}>
             {buildParam && !withQa.some((b) => b.id === buildParam) && <option value={buildParam}>{buildParam}</option>}
@@ -58,6 +60,7 @@ export default function QaPage() {
 }
 
 function Report({ buildId, onOpenTests }: { buildId: string; onOpenTests: () => void }) {
+  const dl = usePerm('artifacts.download');
   const q = useApi(() => Promise.all([api.qa(buildId), api.build(buildId)]), [buildId]);
   return (
     <Loaded q={q}>
@@ -68,7 +71,9 @@ function Report({ buildId, onOpenTests }: { buildId: string; onOpenTests: () => 
             <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               Build <Link href={`/projects/${r.build.projectId}/builds/${r.build.id}`} className="mono text-foreground hover:underline">{r.build.label}</Link> · {r.build.versionNumber}
               <BuildBadges b={r.build} />
-              {qaArtifact && <a className="btn btn-outline btn-sm ml-auto" href={absUrl(qaArtifact.downloadUrl)} download><Download className="size-3.5" />qa-report.json</a>}
+              {qaArtifact && (dl.ok
+                ? <a className="btn btn-outline btn-sm ml-auto" href={absUrl(qaArtifact.downloadUrl)} download><Download className="size-3.5" />qa-report.json</a>
+                : <button className="btn btn-outline btn-sm ml-auto" disabled title={dl.title}><Download className="size-3.5" />qa-report.json</button>)}
             </div>
             <Gates r={r} />
             <div className="alert alert-warning mt-4">

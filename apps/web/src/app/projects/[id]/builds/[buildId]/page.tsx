@@ -11,6 +11,7 @@ import { cn, fmtBytes, fmtDate, fmtDuration, fmtNum, fmtUsd, isActive, shortHash
 import { Card, CardHeader, InlineError, Loaded, PageHeader, Spinner } from '@/components/ui';
 import { BuildBadges } from '@/components/build-badges';
 import { EffectiveGenerationSummary } from '@/components/project-generation';
+import { usePerm } from '@/lib/perms';
 import { useToast } from '@/components/toast';
 import { QaRunDialog } from '@/components/qa-run-dialog';
 import { DeployDialog } from '@/components/deploy-dialog';
@@ -28,6 +29,10 @@ const artifactIcon = { mcp_package: Package, qa_report: FileCheck2, provenance: 
 export default function BuildDetailPage() {
   const { id, buildId } = useParams<{ id: string; buildId: string }>();
   const toast = useToast();
+  const runPerm = usePerm('builds.run');
+  const qaPerm = usePerm('qa.run');
+  const depPerm = usePerm('deploy.manage');
+  const dlPerm = usePerm('artifacts.download');
   const b = useApi(() => api.build(buildId), [buildId]);
   const [logs, setLogs] = useState<BuildLogDto[]>([]);
   const [polling, setPolling] = useState(false);
@@ -111,10 +116,10 @@ export default function BuildDetailPage() {
               title={<span className="flex flex-wrap items-center gap-3"><span className="mono">{d.label}</span><span className="text-muted-foreground">·</span><span className="mono">{d.versionNumber}</span></span>}
               description={<span className="flex flex-wrap items-center gap-2">Created {fmtDate(d.createdAt)} by {d.triggeredBy}<BuildBadges b={d} />{d.kind === 'qa' && d.sourceBuildId && <span>on the code of <Link href={`/projects/${id}/builds/${d.sourceBuildId}`} className="mono text-foreground hover:underline">{d.sourceBuildLabel}</Link></span>}</span>}
               actions={<>
-                <button className="btn btn-danger btn-sm" disabled={!active || cancelling} onClick={cancel}>{cancelling ? <Spinner className="size-3.5" /> : <Square className="size-3.5" />}Cancel job</button>
-                <button className="btn btn-outline btn-sm" disabled={active || d.stages.build !== 'ok'} title={d.stages.build === 'ok' ? undefined : 'This build has no compiled code'} onClick={() => setQaOpen(true)}><FlaskConical className="size-3.5" />Re-run QA</button>
+                <button className="btn btn-danger btn-sm" disabled={!active || cancelling || !runPerm.ok} title={runPerm.title} onClick={cancel}>{cancelling ? <Spinner className="size-3.5" /> : <Square className="size-3.5" />}Cancel job</button>
+                <button className="btn btn-outline btn-sm" disabled={active || d.stages.build !== 'ok' || !qaPerm.ok} title={qaPerm.title ?? (d.stages.build === 'ok' ? undefined : 'This build has no compiled code')} onClick={() => setQaOpen(true)}><FlaskConical className="size-3.5" />Re-run QA</button>
                 <Link className="btn btn-outline btn-sm" href={`/projects/${id}/qa?build=${d.id}`}>QA report</Link>
-                {d.packageVerified && d.stages.package === 'ok' && <button className="btn btn-outline btn-sm" onClick={() => setDeployOpen(true)}><Rocket className="size-3.5" />Deploy</button>}
+                {d.packageVerified && d.stages.package === 'ok' && <button className="btn btn-outline btn-sm" disabled={!depPerm.ok} title={depPerm.title} onClick={() => setDeployOpen(true)}><Rocket className="size-3.5" />Deploy</button>}
               </>}
             />
             <DeployDialog open={deployOpen} onClose={() => setDeployOpen(false)} projectId={id} buildId={d.id} />
@@ -207,7 +212,9 @@ export default function BuildDetailPage() {
                         <div className="truncate text-sm font-medium">{a.filename}</div>
                         <div className="truncate font-mono text-[11px] text-muted-foreground" title={a.sha256}>sha256:{shortHash(a.sha256)} · {fmtBytes(a.size)}</div>
                       </div>
-                      <a className="btn btn-outline btn-sm" href={absUrl(a.downloadUrl)} download><Download className="size-3.5" />Download</a>
+                      {dlPerm.ok
+                        ? <a className="btn btn-outline btn-sm" href={absUrl(a.downloadUrl)} download><Download className="size-3.5" />Download</a>
+                        : <button className="btn btn-outline btn-sm" disabled title={dlPerm.title}><Download className="size-3.5" />Download</button>}
                     </div>
                   );
                 })}
