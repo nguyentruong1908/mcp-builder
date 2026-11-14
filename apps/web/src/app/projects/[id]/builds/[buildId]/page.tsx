@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { CircleCheck, CircleDashed, CircleMinus, CircleX, Download, FileCheck2, FileJson, FlaskConical, Loader2, Package, Square } from 'lucide-react';
+import { CircleCheck, CircleDashed, CircleMinus, CircleX, Download, FileCheck2, FileJson, FlaskConical, Loader2, Package, Rocket, Square } from 'lucide-react';
 import type { BuildEvent, BuildLogDto, StageState } from '@mcp-factory/shared';
 import { absUrl, api, buildEventsUrl } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
@@ -13,6 +13,7 @@ import { BuildBadges } from '@/components/build-badges';
 import { EffectiveGenerationSummary } from '@/components/project-generation';
 import { useToast } from '@/components/toast';
 import { QaRunDialog } from '@/components/qa-run-dialog';
+import { DeployDialog } from '@/components/deploy-dialog';
 
 const stageIcon: Record<StageState, ReactNode> = {
   ok: <CircleCheck className="size-4 text-success" />,
@@ -33,6 +34,7 @@ export default function BuildDetailPage() {
   const [now, setNow] = useState(() => Date.now());
   const [cancelling, setCancelling] = useState(false);
   const [qaOpen, setQaOpen] = useState(false);
+  const [deployOpen, setDeployOpen] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
   const active = b.data ? isActive(b.data.status) : false;
   const wasActive = useRef(false);
@@ -112,8 +114,10 @@ export default function BuildDetailPage() {
                 <button className="btn btn-danger btn-sm" disabled={!active || cancelling} onClick={cancel}>{cancelling ? <Spinner className="size-3.5" /> : <Square className="size-3.5" />}Cancel job</button>
                 <button className="btn btn-outline btn-sm" disabled={active || d.stages.build !== 'ok'} title={d.stages.build === 'ok' ? undefined : 'This build has no compiled code'} onClick={() => setQaOpen(true)}><FlaskConical className="size-3.5" />Re-run QA</button>
                 <Link className="btn btn-outline btn-sm" href={`/projects/${id}/qa?build=${d.id}`}>QA report</Link>
+                {d.packageVerified && d.stages.package === 'ok' && <button className="btn btn-outline btn-sm" onClick={() => setDeployOpen(true)}><Rocket className="size-3.5" />Deploy</button>}
               </>}
             />
+            <DeployDialog open={deployOpen} onClose={() => setDeployOpen(false)} projectId={id} buildId={d.id} />
             <QaRunDialog open={qaOpen} onClose={() => setQaOpen(false)} projectId={id} buildId={d.kind === 'qa' && d.sourceBuildId ? d.sourceBuildId : d.id} buildLabel={d.kind === 'qa' && d.sourceBuildLabel ? d.sourceBuildLabel : d.label} />
             {d.error && <div className="mb-4"><InlineError error={d.error} /></div>}
 

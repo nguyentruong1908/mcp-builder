@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import type { BuildStatus, Impact, IntegrationVerdict, QaLayer, QaStatus, StageName, StageState, VersionStatus } from '@mcp-factory/shared';
+import type { BuildStatus, DeploymentStatus, Impact, IntegrationVerdict, QaLayer, QaStatus, StageName, StageState, VersionStatus } from '@mcp-factory/shared';
 
 export const cn = (...v: ClassValue[]) => twMerge(clsx(v));
 
@@ -33,6 +33,13 @@ export const layerMeta: Record<QaLayer, { label: string; short: string; descript
   agent: { label: 'Agent task eval', short: 'Agent', description: 'Sample tasks from context' },
   custom: { label: 'Custom test cases', short: 'Custom', description: 'Defined by you' },
   install: { label: 'Installation', short: 'Install', description: 'Install into a clean environment' },
+};
+
+export const deploymentStatusMeta: Record<DeploymentStatus, { label: string; tone: Tone }> = {
+  starting: { label: 'Starting', tone: 'info' },
+  running: { label: 'Running', tone: 'success' },
+  stopped: { label: 'Stopped', tone: 'outline' },
+  failed: { label: 'Failed', tone: 'danger' },
 };
 
 export const qaMeta: Record<QaStatus, { label: string; tone: Tone }> = {

@@ -49,6 +49,7 @@ MCP Factory makes that a repeatable product workflow:
    | package | `npm pack`, sha256, `provenance.json`, `qa-report.json` |
 
 6. **Release** a version once it is *Package verified*, download the tarball, and connect it to any MCP client (stdio or Streamable HTTP) or use it as a CLI.
+7. **Or deploy it here (optional)**: one click runs the packaged server on the platform and gives agents a ready-to-paste configuration.
 
 ### QA suite
 
@@ -65,6 +66,18 @@ MCP Factory makes that a repeatable product workflow:
 | Install | The tarball installs and runs in a clean directory |
 
 Two labels come out of it: **Package verified** (the artifact behaves correctly) and **Integration verified** (it works against the real API). A *QA run* re-runs the whole suite on an existing build's code without regenerating it.
+
+### Deploying (optional)
+
+Any *Package verified* build can be deployed from the **Deploy** page, a build, or a version. Downloading the package keeps working as before.
+
+- The Factory installs the exact tarball users would download and runs it in Streamable HTTP mode on a loopback port.
+- Agents reach it at `<PUBLIC_URL>/mcp/<project-slug>` with a bearer token. The token is shown once; the Factory stores only its hash and can rotate it.
+- The server calls your API with the credentials of the environment you pick (for example `prod`).
+- The page gives copyable setup for Claude Code, Codex CLI, generic MCP client JSON, a `curl` check, and an instruction block to paste into an agent's prompt.
+- Redeploying a newer build keeps the URL and token, so connected agents keep working. Deployments restart automatically with the API; stop, start, rotate, logs and removal are on the same page.
+
+Deployed servers run inside the `api` container, next to the Factory. Put the gateway behind TLS before exposing endpoints beyond localhost.
 
 ### Tuning generation per team
 
@@ -166,6 +179,7 @@ pnpm --filter api build && pnpm --filter api test
 - [x] Generation profiles (model, reasoning, `AGENTS.md` rules) with project overrides and provenance
 - [x] Versions, release gate, artifacts with checksums and provenance
 - [x] Codex sign-in from the UI, Docker Compose deployment
+- [x] Optional one-click deployment of generated MCP servers with token auth and copyable agent setup
 
 **Next**
 - [ ] User accounts and roles (developer, domain expert, reviewer, admin, agent developer) and team-level profiles
@@ -176,7 +190,7 @@ pnpm --filter api build && pnpm --filter api test
 - [ ] Private-network runner for APIs that are not reachable from the Factory
 
 **Later**
-- [ ] Managed hosting of generated MCP servers (deploy, domain/TLS, secrets, logs, quotas)
+- [ ] Hosting at scale: one container per deployment, custom domains/TLS, usage quotas and metrics
 - [ ] OAuth2 flows, multipart uploads, file streaming, OpenAPI 3.1
 - [ ] More output runtimes (Python), multi-API workflows, plugin and skills distribution
 

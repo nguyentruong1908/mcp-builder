@@ -263,6 +263,37 @@ export type UpdateGenerationInput = GenerationProfile;
 export interface CodexModelOption { slug: string; displayName: string; defaultReasoning: ReasoningEffort | null; reasoningEfforts: ReasoningEffort[] }
 export interface ModelCheckResult { ok: boolean; model: string; message: string }
 
+// ---------- deployments (optional managed hosting) ----------
+export type DeploymentStatus = 'starting' | 'running' | 'stopped' | 'failed';
+/** Copyable snippet for an MCP client or agent. `{{TOKEN}}` is replaced in the UI when the token is known. */
+export interface DeployInstruction { id: string; title: string; language: 'bash' | 'toml' | 'json' | 'markdown'; content: string }
+export interface DeploymentDto {
+  id: string;
+  projectId: string;
+  slug: string;                 // public path: /mcp/<slug>
+  url: string;                  // full MCP endpoint (Streamable HTTP)
+  status: DeploymentStatus;
+  buildId: string;
+  buildLabel: string;
+  versionNumber: string;
+  packageName: string;
+  connectionId: string;
+  connectionName: string;       // environment whose credentials the server uses upstream
+  tokenHint: string;            // last characters of the bearer token; the token itself is shown once
+  lastError: string | null;
+  startedAt: string | null;
+  stoppedAt: string | null;
+  createdAt: string;
+  tools: { name: string; description: string; impact: Impact; requireConfirm: boolean }[];
+  instructions: DeployInstruction[];
+}
+export interface DeployInput { connectionId: string }
+/**
+ * Returned by deploy and token rotation: the only time a token is visible.
+ * token is null when redeploying an existing deployment, which keeps its URL and token so connected agents keep working.
+ */
+export interface DeployResult { deployment: DeploymentDto; token: string | null }
+
 // ---------- codex auth ----------
 export type DeviceLoginState = 'idle' | 'pending' | 'success' | 'failed' | 'cancelled';
 export interface CodexAuthStatus {

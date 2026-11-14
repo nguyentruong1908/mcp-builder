@@ -6,6 +6,12 @@
 			flush_interval -1
 		}
 	}
+	# Deployed MCP servers (Streamable HTTP); the API authenticates and proxies.
+	handle /mcp/* {
+		reverse_proxy api:4000 {
+			flush_interval -1
+		}
+	}
 	handle {
 		reverse_proxy web:3000
 	}

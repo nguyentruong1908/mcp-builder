@@ -73,6 +73,14 @@ export const api = {
   qa: (bid: string) => req<T.QaReport>(`/builds/${e(bid)}/qa`),
   qaRun: (bid: string, input: T.CreateQaRunInput) => req<T.BuildSummary>(`/builds/${e(bid)}/qa-run`, { method: 'POST', json: input }),
 
+  deployment: (id: string) => req<T.DeploymentDto | null>(`/projects/${e(id)}/deployment`),
+  deploy: (bid: string, input: T.DeployInput) => req<T.DeployResult>(`/builds/${e(bid)}/deploy`, { method: 'POST', json: input }),
+  startDeployment: (did: string) => req<T.DeploymentDto>(`/deployments/${e(did)}/start`, { method: 'POST' }),
+  stopDeployment: (did: string) => req<T.DeploymentDto>(`/deployments/${e(did)}/stop`, { method: 'POST' }),
+  rotateDeploymentToken: (did: string) => req<T.DeployResult>(`/deployments/${e(did)}/rotate-token`, { method: 'POST' }),
+  removeDeployment: (did: string) => req<{ ok: true }>(`/deployments/${e(did)}`, { method: 'DELETE' }),
+  deploymentLogs: (did: string) => req<{ lines: string[] }>(`/deployments/${e(did)}/logs`),
+
   testCases: (id: string) => req<T.TestCaseDto[]>(`/projects/${e(id)}/test-cases`),
   createTestCase: (id: string, input: T.UpsertTestCaseInput) => req<T.TestCaseDto>(`/projects/${e(id)}/test-cases`, { method: 'POST', json: input }),
   updateTestCase: (tid: string, input: Partial<T.UpsertTestCaseInput>) => req<T.TestCaseDto>(`/test-cases/${e(tid)}`, { method: 'PATCH', json: input }),

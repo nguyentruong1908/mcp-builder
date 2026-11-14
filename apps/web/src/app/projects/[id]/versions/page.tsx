@@ -3,13 +3,14 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { Copy, Download, FileCheck2, FileJson, GitBranch, Package, Rocket, TriangleAlert } from 'lucide-react';
+import { Copy, Download, FileCheck2, FileJson, GitBranch, Globe, Package, Rocket, TriangleAlert } from 'lucide-react';
 import type { VersionDto } from '@mcp-factory/shared';
 import { absUrl, api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { copyText, fmtBytes, fmtDate, shortHash, versionStatusMeta } from '@/lib/utils';
 import { Badge, Card, CardHeader, EmptyState, Loaded, PageHeader, Spinner, Tabs } from '@/components/ui';
 import { BuildBadges } from '@/components/build-badges';
+import { DeployDialog } from '@/components/deploy-dialog';
 import { SpecDiffView } from '@/components/spec-diff';
 import { useToast } from '@/components/toast';
 
@@ -23,6 +24,7 @@ export default function VersionsPage() {
   const spec = useApi(() => api.spec(id), [id]);
   const project = useApi(() => api.project(id), [id]);
   const [busy, setBusy] = useState<string | null>(null);
+  const [deployBuild, setDeployBuild] = useState<string | null>(null);
 
   async function act(v: VersionDto, kind: 'release' | 'deprecate') {
     if (kind === 'deprecate' && !confirm(`Deprecate ${v.number}? This only marks and announces it; packages users already downloaded cannot be revoked.`)) return;
@@ -69,6 +71,9 @@ export default function VersionsPage() {
                           </button>
                         )}
                         {v.status === 'released' && <button className="btn btn-ghost btn-sm" disabled={busy === v.id} onClick={() => act(v, 'deprecate')}>Deprecate</button>}
+                        {v.latestBuild?.packageVerified && v.latestBuild.stages.package === 'ok' && (
+                          <button className="btn btn-ghost btn-sm" onClick={() => setDeployBuild(v.latestBuild!.id)}><Globe className="size-3.5" />Deploy</button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -78,6 +83,8 @@ export default function VersionsPage() {
           </Card>
         )}
       </Loaded>
+
+      {deployBuild && <DeployDialog open onClose={() => setDeployBuild(null)} projectId={id} buildId={deployBuild} />}
 
       <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
         <Card>

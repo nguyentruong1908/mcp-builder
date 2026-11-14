@@ -56,6 +56,7 @@ model Project {
   archivedAt  DateTime?
 
   specs       SpecSnapshot[]
+  deployment  Deployment?
   testCases   TestCase[]
   context     ProjectContext?
   tools       ToolDefinition[]
@@ -201,6 +202,7 @@ model Build {
   finishedAt          DateTime?
 
   logs      BuildLog[]
+  deployments Deployment[]
   qaResults QaResult[]
   artifacts Artifact[]
 
@@ -282,4 +284,24 @@ model TestCase {
   updatedAt      DateTime @updatedAt
 
   @@index([projectId])
+}
+
+/** Optional managed hosting: the packaged MCP server of one build, run by the Factory behind /mcp/<slug>. */
+model Deployment {
+  id           String    @id @default(cuid())
+  projectId    String    @unique // one deployment per project; redeploy replaces the build
+  project      Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  slug         String    @unique
+  buildId      String
+  build        Build     @relation(fields: [buildId], references: [id], onDelete: Cascade)
+  connectionId String
+  desired      String    @default("running") // running | stopped (restored after an API restart)
+  status       String    @default("starting") // starting | running | stopped | failed
+  tokenHash    String
+  tokenHint    String
+  lastError    String?
+  startedAt    DateTime?
+  stoppedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 }

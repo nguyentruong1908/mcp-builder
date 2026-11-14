@@ -17,6 +17,8 @@ export const config = {
   },
   specFetchAllowlist: (process.env.SPEC_FETCH_ALLOWLIST ?? 'localhost,127.0.0.1').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
   workerPollMs: num(process.env.WORKER_POLL_MS, 2000),
+  // Public base URL used to build deployed MCP endpoints (the gateway in Docker, the API itself in dev).
+  publicUrl: (process.env.PUBLIC_URL ?? `http://localhost:${num(process.env.PORT, 4000)}`).replace(/\/$/, ''),
 };
 
 /** Factory-managed Codex home (auth.json lives here, never in the DB). */
