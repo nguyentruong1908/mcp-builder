@@ -11,6 +11,9 @@ import { createServer } from 'node:net';
 import { join } from 'node:path';
 import { z } from 'zod';
 import type { DeployResult, DeploymentDto, DeploymentStatus } from '@mcp-builder/shared';
+import { AccessService } from '../auth/access.service.js';
+import { currentUser } from '../auth/context.js';
+import { Perm } from '../auth/guards.js';
 import { config } from '../config.js';
 import { AuditService } from '../core/core.services.js';
 import { buildLabel } from '../core/mappers.js';
@@ -164,12 +167,17 @@ export function mcpProxy(prisma: PrismaService, manager: DeploymentManager) {
 
 @Controller()
 export class DeploymentsController {
-  constructor(private readonly prisma: PrismaService, private readonly manager: DeploymentManager, private readonly audit: AuditService) {}
+  constructor(
+    private readonly prisma: PrismaService, private readonly manager: DeploymentManager, private readonly audit: AuditService, private readonly access: AccessService,
+  ) {}
 
   private async dto(id: string): Promise<DeploymentDto> {
     const d = await this.prisma.deployment.findUnique({ where: { id }, include: { project: true, build: { include: { version: true } } } });
     if (!d) throw new NotFoundException('Deployment not found');
-    const conn = await this.prisma.connection.findUnique({ where: { id: d.connectionId }, select: { name: true } });
+    const [conn, perms] = await Promise.all([
+      this.prisma.connection.findUnique({ where: { id: d.connectionId }, select: { name: true } }),
+      this.access.projectPermissions(currentUser()!, d.projectId),
+    ]);
     const tools = ((d.build.toolsSnapshot ?? d.build.version.toolsSnapshot) as unknown as ToolSnapshot[] | null ?? [])
       .map(({ name, description, impact, requireConfirm }) => ({ name, description, impact, requireConfirm }));
     const url = `${config.publicUrl}/mcp/${d.slug}`;
@@ -193,23 +201,25 @@ export class DeploymentsController {
       createdAt: d.createdAt.toISOString(),
       tools,
       instructions: buildInstructions({ url, slug: d.slug, projectName: d.project.name, description: d.project.description, tools }),
+      canManage: perms?.includes('deploy.manage') ?? false,
     };
   }
 
   /** Every deployment across projects, for the workspace Deployments page. */
   @Get('deployments')
   async list(): Promise<DeploymentDto[]> {
-    const all = await this.prisma.deployment.findMany({ select: { id: true }, orderBy: { project: { name: 'asc' } } });
+    const ids = await this.access.accessibleProjectIds(currentUser()!);
+    const all = await this.prisma.deployment.findMany({ where: ids === 'all' ? {} : { projectId: { in: ids } }, select: { id: true }, orderBy: { project: { name: 'asc' } } });
     return Promise.all(all.map((d) => this.dto(d.id)));
   }
 
-  @Get('projects/:id/deployment')
+  @Perm('member', 'project') @Get('projects/:id/deployment')
   async get(@Param('id') projectId: string): Promise<DeploymentDto | null> {
     const d = await this.prisma.deployment.findUnique({ where: { projectId }, select: { id: true } });
     return d ? this.dto(d.id) : null;
   }
 
-  @Post('builds/:id/deploy')
+  @Perm('deploy.manage', 'build') @Post('builds/:id/deploy')
   async deploy(@Param('id') buildId: string, @Body() body: unknown): Promise<DeployResult> {
     const { connectionId } = parse(z.object({ connectionId: z.string().min(1) }).strict(), body);
     const build = await this.prisma.build.findUnique({ where: { id: buildId }, include: { artifacts: true, project: true } });
@@ -236,31 +246,31 @@ export class DeploymentsController {
     return { deployment: await this.dto(id), token };
   }
 
-  @Post('deployments/:id/start')
+  @Perm('deploy.manage', 'deployment') @Post('deployments/:id/start')
   async start(@Param('id') id: string): Promise<DeploymentDto> {
     await this.prisma.deployment.update({ where: { id }, data: { desired: 'running', status: 'starting' } }).catch(() => { throw new NotFoundException('Deployment not found'); });
     void this.manager.launch(id);
     return this.dto(id);
   }
 
-  @Post('deployments/:id/stop')
+  @Perm('deploy.manage', 'deployment') @Post('deployments/:id/stop')
   async stop(@Param('id') id: string): Promise<DeploymentDto> {
-    await this.dto(id);
+    const { projectId } = await this.dto(id);
     await this.manager.stop(id);
-    await this.audit.log('deployment.stop', id);
+    await this.audit.log('deployment.stop', id, { projectId });
     return this.dto(id);
   }
 
-  @Post('deployments/:id/rotate-token')
+  @Perm('deploy.manage', 'deployment') @Post('deployments/:id/rotate-token')
   async rotate(@Param('id') id: string): Promise<DeployResult> {
-    await this.dto(id);
+    const { projectId } = await this.dto(id);
     const token = newToken();
     await this.prisma.deployment.update({ where: { id }, data: { tokenHash: sha256(token), tokenHint: token.slice(-4) } });
-    await this.audit.log('deployment.rotate_token', id);
+    await this.audit.log('deployment.rotate_token', id, { projectId });
     return { deployment: await this.dto(id), token };
   }
 
-  @Delete('deployments/:id')
+  @Perm('deploy.manage', 'deployment') @Delete('deployments/:id')
   async remove(@Param('id') id: string) {
     const d = await this.prisma.deployment.findUnique({ where: { id } });
     if (!d) throw new NotFoundException('Deployment not found');
@@ -271,7 +281,7 @@ export class DeploymentsController {
     return { ok: true };
   }
 
-  @Get('deployments/:id/logs')
+  @Perm('member', 'deployment') @Get('deployments/:id/logs')
   logs(@Param('id') id: string) { return { lines: this.manager.logs(id) }; }
 }
 

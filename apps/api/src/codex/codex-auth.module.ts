@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path';
 import { z } from 'zod';
 import type { CodexAuthStatus } from '@mcp-builder/shared';
 import { codexHome, codexSandbox, config } from '../config.js';
+import { Perm } from '../auth/guards.js';
 import { AuditService } from '../core/core.services.js';
 import { parse } from '../core/util.js';
 import { minimalEnv, run } from '../builds/pipeline/proc.js';
@@ -110,6 +111,7 @@ export class CodexAuthController {
     return { configured: codexAuthConfigured(), source: codexAuthSource(), mode, email, plan, lastRefresh, codexVersion: await codexVersion(), model: config.codexModel, sandbox: codexSandbox, sandboxError: await codexSandboxError(), device: dev };
   }
 
+  @Perm('codex.manage')
   @Post('upload')
   async upload(@Body() body: unknown): Promise<CodexAuthStatus> {
     const { content } = parse(z.object({ content: z.string().min(2).max(64 * 1024) }).strict(), body);
@@ -121,6 +123,7 @@ export class CodexAuthController {
     return this.status();
   }
 
+  @Perm('codex.manage')
   @Post('api-key')
   async apiKey(@Body() body: unknown): Promise<CodexAuthStatus> {
     const { apiKey } = parse(z.object({ apiKey: z.string().trim().regex(/^sk-[A-Za-z0-9_-]{20,}$/, 'Invalid API key format (sk-...)') }).strict(), body);
@@ -131,6 +134,7 @@ export class CodexAuthController {
     return this.status();
   }
 
+  @Perm('codex.manage')
   @Post('device')
   async startDevice(): Promise<CodexAuthStatus> {
     if (device.state === 'pending') throw new ConflictException('A sign-in is already waiting for confirmation');
@@ -160,6 +164,7 @@ export class CodexAuthController {
     return this.status();
   }
 
+  @Perm('codex.manage')
   @Delete('device')
   async cancelDevice(): Promise<CodexAuthStatus> {
     if (device.state === 'pending') {
@@ -170,6 +175,7 @@ export class CodexAuthController {
     return this.status();
   }
 
+  @Perm('codex.manage')
   @Post('logout')
   async logout(): Promise<CodexAuthStatus> {
     await this.cancelDevice();

@@ -1,5 +1,5 @@
 import {
-  BadRequestException, Body, Controller, ForbiddenException, Get, HttpException, Injectable, Logger, Module, Post, Req, Res,
+  BadRequestException, Body, Controller, ForbiddenException, Get, Global, HttpException, Injectable, Logger, Module, Post, Req, Res,
   type OnApplicationBootstrap,
 } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
@@ -10,7 +10,8 @@ import { AuditService } from '../core/core.services.js';
 import { PrismaService } from '../core/prisma.service.js';
 import { parse } from '../core/util.js';
 import { currentUser, requestContext, type RequestUser } from './context.js';
-import { AllowPasswordChange, AuthGuard, Public } from './guards.js';
+import { AccessService } from './access.service.js';
+import { AllowPasswordChange, AuthGuard, PermGuard, Public } from './guards.js';
 import { LoginLimiter } from './limiter.js';
 import { DUMMY_HASH, hashPassword, passwordProblem, verifyPassword } from './password.js';
 import { ADMIN_ROLE_ID } from './permissions.js';
@@ -130,9 +131,14 @@ export class AuthBootstrap implements OnApplicationBootstrap {
   }
 }
 
+// Global so every feature module can inject AccessService. Guard order: AuthGuard, then PermGuard.
+@Global()
 @Module({
   controllers: [AuthController],
-  providers: [SessionService, LoginLimiter, AuthBootstrap, { provide: APP_GUARD, useClass: AuthGuard }],
-  exports: [SessionService],
+  providers: [
+    SessionService, LoginLimiter, AuthBootstrap, AccessService,
+    { provide: APP_GUARD, useClass: AuthGuard }, { provide: APP_GUARD, useClass: PermGuard },
+  ],
+  exports: [SessionService, AccessService],
 })
 export class AuthModule {}

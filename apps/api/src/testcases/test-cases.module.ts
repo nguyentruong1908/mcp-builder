@@ -1,6 +1,7 @@
 import { BadRequestException, Body, Controller, Delete, Get, Module, NotFoundException, Param, Patch, Post } from '@nestjs/common';
 import { z } from 'zod';
 import type { TestCaseDto } from '@mcp-builder/shared';
+import { Perm } from '../auth/guards.js';
 import { AuditService } from '../core/core.services.js';
 import { PrismaService } from '../core/prisma.service.js';
 import { parse } from '../core/util.js';
@@ -74,12 +75,12 @@ export function toTestCaseDto(t: TestCase): TestCaseDto {
 export class TestCasesController {
   constructor(private readonly prisma: PrismaService, private readonly audit: AuditService) {}
 
-  @Get('projects/:id/test-cases')
+  @Perm('member', 'project') @Get('projects/:id/test-cases')
   async list(@Param('id') projectId: string): Promise<TestCaseDto[]> {
     return (await this.prisma.testCase.findMany({ where: { projectId }, orderBy: { createdAt: 'asc' } })).map(toTestCaseDto);
   }
 
-  @Post('projects/:id/test-cases')
+  @Perm('testcases.manage', 'project') @Post('projects/:id/test-cases')
   async create(@Param('id') projectId: string, @Body() body: unknown): Promise<TestCaseDto> {
     const v = parse(base, body);
     check(v);
@@ -89,7 +90,7 @@ export class TestCasesController {
     return toTestCaseDto(t);
   }
 
-  @Patch('test-cases/:id')
+  @Perm('testcases.manage', 'testCase') @Patch('test-cases/:id')
   async update(@Param('id') id: string, @Body() body: unknown): Promise<TestCaseDto> {
     const cur = await this.prisma.testCase.findUnique({ where: { id } });
     if (!cur) throw new NotFoundException('Test case not found');
@@ -101,7 +102,7 @@ export class TestCasesController {
     return toTestCaseDto(t);
   }
 
-  @Delete('test-cases/:id')
+  @Perm('testcases.manage', 'testCase') @Delete('test-cases/:id')
   async remove(@Param('id') id: string) {
     const t = await this.prisma.testCase.delete({ where: { id } }).catch(() => { throw new NotFoundException('Test case not found'); });
     await this.audit.log('testcase.delete', t.name, { projectId: t.projectId });

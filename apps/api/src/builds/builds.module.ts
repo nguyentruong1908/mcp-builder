@@ -8,6 +8,9 @@ import type { Response } from 'express';
 import { Observable } from 'rxjs';
 import { z } from 'zod';
 import type { BuildDetail, BuildLogDto, BuildSummary, QaLayer, QaReport, QaStatus, VersionDto } from '@mcp-builder/shared';
+import { AccessService } from '../auth/access.service.js';
+import { actorName } from '../auth/context.js';
+import { Perm } from '../auth/guards.js';
 import { config } from '../config.js';
 import { AuditService, BuildEvents, SettingsService } from '../core/core.services.js';
 import { buildInclude, buildLabel, toArtifactDto, toBuildSummary, toVersionSummary } from '../core/mappers.js';
@@ -100,7 +103,7 @@ export class BuildsService {
       },
       include: buildInclude,
     });
-    await this.audit.log('build.qa_run', `${src.project.name} · QA on the code of ${run.sourceBuildLabel} → ${buildLabel(run.seq)}`, { projectId: src.projectId, buildId: run.id });
+    await this.audit.log('build.qa_run', `${src.project.name} · QA on the code of ${run.sourceBuildLabel} → ${buildLabel(run.seq)}`, { projectId: src.projectId, buildId: run.id }, actor);
     return toBuildSummary(run);
   }
 
@@ -208,24 +211,29 @@ export class BuildWorker implements OnApplicationBootstrap, OnApplicationShutdow
 
 @Controller()
 export class BuildsController {
-  constructor(private readonly svc: BuildsService, private readonly prisma: PrismaService, private readonly events: BuildEvents, private readonly audit: AuditService) {}
+  constructor(
+    private readonly svc: BuildsService, private readonly prisma: PrismaService, private readonly events: BuildEvents,
+    private readonly audit: AuditService, private readonly access: AccessService,
+  ) {}
 
-  @Post('projects/:id/builds') create(@Param('id') id: string, @Body() body: unknown) { return this.svc.create(id, body); }
+  @Perm('builds.run', 'project') @Post('projects/:id/builds') create(@Param('id') id: string, @Body() body: unknown) { return this.svc.create(id, body, actorName()); }
 
-  @Get('projects/:id/builds')
+  @Perm('member', 'project') @Get('projects/:id/builds')
   async list(@Param('id') id: string): Promise<BuildSummary[]> {
     return (await this.prisma.build.findMany({ where: { projectId: id }, orderBy: { createdAt: 'desc' }, take: 50, include: buildInclude })).map(toBuildSummary);
   }
 
-  @Get('builds/:id') detail(@Param('id') id: string) { return this.svc.detail(id); }
-  @Post('builds/:id/qa-run') qaRun(@Param('id') id: string, @Body() body: unknown) { return this.svc.createQaRun(id, body); }
-  @Get('builds/:id/logs') logs(@Param('id') id: string, @Query('after') after?: string) { return this.svc.logs(id, Number(after) || 0); }
-  @Get('builds/:id/qa') qa(@Param('id') id: string) { return this.svc.qa(id); }
+  @Perm('member', 'build') @Get('builds/:id') detail(@Param('id') id: string) { return this.svc.detail(id); }
+  @Perm('qa.run', 'build') @Post('builds/:id/qa-run') qaRun(@Param('id') id: string, @Body() body: unknown) { return this.svc.createQaRun(id, body, actorName()); }
+  @Perm('member', 'build') @Get('builds/:id/logs') logs(@Param('id') id: string, @Query('after') after?: string) { return this.svc.logs(id, Number(after) || 0); }
+  @Perm('member', 'build') @Get('builds/:id/qa') qa(@Param('id') id: string) { return this.svc.qa(id); }
 
   @Post('builds/:id/cancel')
   async cancel(@Param('id') id: string) {
     const b = await this.prisma.build.findUnique({ where: { id } });
     if (!b) throw new NotFoundException('Build not found');
+    // Export builds need builds.run, standalone QA runs need qa.run.
+    await this.access.assertProject(b.projectId, b.kind === 'qa' ? 'qa.run' : 'builds.run', 'Build not found');
     if (b.status === 'queued') await this.prisma.build.update({ where: { id }, data: { status: 'cancelled', cancelRequested: true, finishedAt: new Date(), error: 'Cancelled by user' } });
     else if (b.status === 'running') await this.prisma.build.update({ where: { id }, data: { cancelRequested: true } });
     else throw new BadRequestException('Build has already finished');
@@ -234,7 +242,7 @@ export class BuildsController {
   }
 
   /** SSE: replays existing logs, then streams new logs and build state changes. */
-  @Sse('builds/:id/events')
+  @Perm('member', 'build') @Sse('builds/:id/events')
   stream(@Param('id') id: string): Observable<MessageEvent> {
     return new Observable<MessageEvent>((sub) => {
       let lastId = 0;
@@ -253,11 +261,11 @@ export class BuildsController {
     });
   }
 
-  @Get('projects/:id/versions') versions(@Param('id') id: string) { return this.svc.versions(id); }
-  @Post('versions/:id/release') release(@Param('id') id: string) { return this.svc.release(id); }
-  @Post('versions/:id/deprecate') deprecate(@Param('id') id: string) { return this.svc.deprecate(id); }
+  @Perm('member', 'project') @Get('projects/:id/versions') versions(@Param('id') id: string) { return this.svc.versions(id); }
+  @Perm('versions.release', 'version') @Post('versions/:id/release') release(@Param('id') id: string) { return this.svc.release(id); }
+  @Perm('versions.release', 'version') @Post('versions/:id/deprecate') deprecate(@Param('id') id: string) { return this.svc.deprecate(id); }
 
-  @Get('artifacts/:id/download')
+  @Perm('artifacts.download', 'artifact') @Get('artifacts/:id/download')
   async download(@Param('id') id: string, @Res() res: Response) {
     const a = await this.prisma.artifact.findUnique({ where: { id } });
     if (!a || !existsSync(a.path) || !a.path.startsWith(config.dataDir)) throw new NotFoundException('Artifact not found');

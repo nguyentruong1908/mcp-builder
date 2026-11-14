@@ -1,6 +1,7 @@
 import { BadRequestException, Body, Controller, Get, Injectable, Module, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { z } from 'zod';
 import type { SpecDiff, SpecResponse, ToolDto } from '@mcp-builder/shared';
+import { Perm } from '../auth/guards.js';
 import { config } from '../config.js';
 import { AuditService } from '../core/core.services.js';
 import { toSpecDto, toToolDto } from '../core/mappers.js';
@@ -149,17 +150,17 @@ export class SpecService {
 export class SpecController {
   constructor(private readonly spec: SpecService, private readonly prisma: PrismaService) {}
 
-  @Post('projects/:id/spec') import(@Param('id') id: string, @Body() body: unknown) { return this.spec.import(id, body); }
-  @Get('projects/:id/spec') list(@Param('id') id: string) { return this.spec.list(id); }
-  @Get('projects/:id/spec/diff') diff(@Param('id') id: string, @Query('from') from?: string, @Query('to') to?: string) { return this.spec.diff(id, from, to); }
+  @Perm('spec.edit', 'project') @Post('projects/:id/spec') import(@Param('id') id: string, @Body() body: unknown) { return this.spec.import(id, body); }
+  @Perm('member', 'project') @Get('projects/:id/spec') list(@Param('id') id: string) { return this.spec.list(id); }
+  @Perm('member', 'project') @Get('projects/:id/spec/diff') diff(@Param('id') id: string, @Query('from') from?: string, @Query('to') to?: string) { return this.spec.diff(id, from, to); }
 
-  @Get('projects/:id/tools')
+  @Perm('member', 'project') @Get('projects/:id/tools')
   async tools(@Param('id') id: string): Promise<ToolDto[]> {
     const rows = await this.prisma.toolDefinition.findMany({ where: { projectId: id, present: true }, orderBy: [{ tag: 'asc' }, { path: 'asc' }, { method: 'asc' }] });
     return rows.map(toToolDto);
   }
 
-  @Patch('tools/:id')
+  @Perm('tools.edit', 'tool') @Patch('tools/:id')
   async updateTool(@Param('id') id: string, @Body() body: unknown): Promise<ToolDto> {
     const patch = parse(toolPatchSchema, body);
     const tool = await this.prisma.toolDefinition.findUnique({ where: { id } });

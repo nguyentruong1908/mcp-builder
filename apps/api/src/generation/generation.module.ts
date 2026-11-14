@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Global, Injectable, Module, NotFoundException, Param, Post, Put } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, Global, Injectable, Module, NotFoundException, Param, Post, Put } from '@nestjs/common';
 import { existsSync, readFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -8,6 +8,9 @@ import { z } from 'zod';
 import type {
   CodexModelOption, EffectiveGeneration, GenerationProfile, GenerationProfileDto, ModelCheckResult, ProjectGenerationDto, ReasoningEffort,
 } from '@mcp-builder/shared';
+import { AccessService } from '../auth/access.service.js';
+import { currentUser } from '../auth/context.js';
+import { Perm } from '../auth/guards.js';
 import { CODEX_ISOLATION_CONFIG, codexHome, config } from '../config.js';
 import { AuditService } from '../core/core.services.js';
 import { PrismaService } from '../core/prisma.service.js';
@@ -128,19 +131,23 @@ function cachedModels(): CodexModelOption[] {
 
 @Controller()
 export class GenerationController {
-  constructor(private readonly svc: GenerationService) {}
+  constructor(private readonly svc: GenerationService, private readonly access: AccessService) {}
 
   @Get('generation-profile') workspace() { return this.svc.workspace(); }
-  @Put('generation-profile') putWorkspace(@Body() body: unknown) { return this.svc.putWorkspace(body); }
-  @Get('projects/:id/generation') project(@Param('id') id: string) { return this.svc.project(id); }
-  @Put('projects/:id/generation') putProject(@Param('id') id: string, @Body() body: unknown) { return this.svc.putProject(id, body); }
-  @Delete('projects/:id/generation') deleteProject(@Param('id') id: string) { return this.svc.deleteProject(id); }
+  @Perm('settings.manage') @Put('generation-profile') putWorkspace(@Body() body: unknown) { return this.svc.putWorkspace(body); }
+  @Perm('member', 'project') @Get('projects/:id/generation') project(@Param('id') id: string) { return this.svc.project(id); }
+  @Perm('project.edit', 'project') @Put('projects/:id/generation') putProject(@Param('id') id: string, @Body() body: unknown) { return this.svc.putProject(id, body); }
+  @Perm('project.edit', 'project') @Delete('projects/:id/generation') deleteProject(@Param('id') id: string) { return this.svc.deleteProject(id); }
 
   @Get('codex/models') models(): CodexModelOption[] { return cachedModels(); }
 
   /** Proves the account can use a model with a tiny Codex turn (costs a few tokens). */
   @Post('codex/models/check')
   async check(@Body() body: unknown): Promise<ModelCheckResult> {
+    const user = currentUser()!;
+    if (!user.permissions.includes('settings.manage') && !(await this.access.hasAnyProjectPermission(user, 'project.edit'))) {
+      throw new ForbiddenException('Requires permission settings.manage or project.edit');
+    }
     const { model } = parse(z.object({ model: z.string().trim().regex(/^[A-Za-z0-9._:-]{1,80}$/) }).strict(), body);
     const dir = await mkdtemp(join(tmpdir(), 'mcpf-model-'));
     try {

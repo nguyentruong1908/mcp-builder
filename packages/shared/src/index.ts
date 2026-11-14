@@ -29,6 +29,7 @@ export interface ProjectSummary {
   currentRelease: VersionSummary | null;
   latestDraft: VersionSummary | null;
   latestBuild: BuildSummary | null;
+  myPermissions: ProjectPermission[]; // the signed-in user's effective permissions (all of them with projects.all)
 }
 
 export type StepState = 'done' | 'warn' | 'fail' | 'todo';
@@ -287,6 +288,7 @@ export interface DeploymentDto {
   createdAt: string;
   tools: { name: string; description: string; impact: Impact; requireConfirm: boolean }[];
   instructions: DeployInstruction[];
+  canManage: boolean;           // the signed-in user has deploy.manage on this project
 }
 export interface DeployInput { connectionId: string }
 /**

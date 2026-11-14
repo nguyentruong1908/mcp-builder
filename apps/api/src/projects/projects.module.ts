@@ -1,8 +1,12 @@
-import { BadRequestException, Body, Controller, Get, Injectable, Module, NotFoundException, Param, Patch, Post, Put, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, ForbiddenException, Get, Injectable, Module, NotFoundException, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { z } from 'zod';
 import type {
   AuditDto, ConflictDto, ContextDto, DashboardDto, GlossaryEntry, ProjectDetail, ProjectStep, ProjectSummary, SettingsDto,
 } from '@mcp-builder/shared';
+import { AccessService } from '../auth/access.service.js';
+import { currentUser } from '../auth/context.js';
+import { Perm } from '../auth/guards.js';
+import { OWNER_ROLE_ID } from '../auth/permissions.js';
 import { AuditService, SettingsService } from '../core/core.services.js';
 import { buildInclude, toBuildSummary, toVersionSummary } from '../core/mappers.js';
 import { PrismaService } from '../core/prisma.service.js';
@@ -42,16 +46,25 @@ const EMPTY_CONTEXT: Omit<ContextDto, 'updatedAt'> = {
 
 @Injectable()
 export class ProjectsService {
-  constructor(private readonly prisma: PrismaService, private readonly audit: AuditService, private readonly settings: SettingsService) {}
+  constructor(
+    private readonly prisma: PrismaService, private readonly audit: AuditService, private readonly settings: SettingsService, private readonly access: AccessService,
+  ) {}
+
+  /** Prisma filter on project id for the signed-in user; undefined = every project (projects.all). */
+  async accessible(): Promise<string[] | undefined> {
+    const ids = await this.access.accessibleProjectIds(currentUser()!);
+    return ids === 'all' ? undefined : ids;
+  }
 
   async summary(p: Project): Promise<ProjectSummary> {
-    const [spec, toolCount, selectedCount, release, draft, build] = await Promise.all([
+    const [spec, toolCount, selectedCount, release, draft, build, myPermissions] = await Promise.all([
       this.prisma.specSnapshot.findFirst({ where: { projectId: p.id }, orderBy: { createdAt: 'desc' }, select: { sourceUrl: true, filename: true } }),
       this.prisma.toolDefinition.count({ where: { projectId: p.id, present: true, unsupportedReason: null } }),
       this.prisma.toolDefinition.count({ where: { projectId: p.id, present: true, selected: true } }),
       this.prisma.version.findFirst({ where: { projectId: p.id, status: 'released' }, orderBy: { releasedAt: 'desc' } }),
       this.prisma.version.findFirst({ where: { projectId: p.id, status: 'draft' }, orderBy: { createdAt: 'desc' } }),
       this.prisma.build.findFirst({ where: { projectId: p.id }, orderBy: { createdAt: 'desc' }, include: buildInclude }),
+      this.access.projectPermissions(currentUser()!, p.id),
     ]);
     return {
       id: p.id,
@@ -68,6 +81,7 @@ export class ProjectsService {
       currentRelease: release ? toVersionSummary(release) : null,
       latestDraft: draft ? toVersionSummary(draft) : null,
       latestBuild: build ? toBuildSummary(build) : null,
+      myPermissions: myPermissions ?? [],
     };
   }
 
@@ -109,8 +123,13 @@ export class ProjectsService {
     const input = parse(createSchema, body);
     let slug = slugify(input.name);
     for (let i = 2; await this.prisma.project.findUnique({ where: { slug } }); i++) slug = `${slugify(input.name)}-${i}`;
+    const me = currentUser()!;
+    // Nested writes run in one transaction: the project never exists without its Owner member.
     const p = await this.prisma.project.create({
-      data: { name: input.name, slug, description: input.description ?? '', owner: input.owner || 'system', outputs: input.outputs ?? { mcp: true, cli: true }, context: { create: {} } },
+      data: {
+        name: input.name, slug, description: input.description ?? '', owner: me.username, outputs: input.outputs ?? { mcp: true, cli: true },
+        context: { create: {} }, members: { create: { userId: me.id, roleId: OWNER_ROLE_ID } },
+      },
     });
     await this.audit.log('project.create', p.name, { projectId: p.id });
     return this.detail(p.id);
@@ -120,14 +139,14 @@ export class ProjectsService {
     const input = parse(updateSchema, body);
     await this.get(id);
     await this.prisma.project.update({ where: { id }, data: input });
-    await this.audit.log('project.update', id, input);
+    await this.audit.log('project.update', id, { projectId: id, ...input });
     return this.detail(id);
   }
 
   async archive(id: string) {
     await this.get(id);
     await this.prisma.project.update({ where: { id }, data: { archivedAt: new Date() } });
-    await this.audit.log('project.archive', id);
+    await this.audit.log('project.archive', id, { projectId: id });
     return this.detail(id);
   }
 
@@ -144,7 +163,7 @@ export class ProjectsService {
     await this.get(id);
     const data = { ...input, glossary: input.glossary as unknown as Prisma.InputJsonValue };
     await this.prisma.projectContext.upsert({ where: { projectId: id }, create: { projectId: id, ...data }, update: data });
-    await this.audit.log('context.update', id);
+    await this.audit.log('context.update', id, { projectId: id });
     return this.getContext(id);
   }
 
@@ -175,14 +194,17 @@ export class ProjectsService {
   async dashboard(): Promise<DashboardDto> {
     const weekAgo = new Date(Date.now() - 7 * 864e5);
     const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-    const projects = await this.prisma.project.findMany({ where: { archivedAt: null }, orderBy: { updatedAt: 'desc' } });
+    const ids = await this.accessible();
+    const mine = ids && { projectId: { in: ids } };
+    const projects = await this.prisma.project.findMany({ where: { archivedAt: null, ...(ids && { id: { in: ids } }) }, orderBy: { updatedAt: 'desc' } });
     const [summaries, running, activity, failedQa7d, newVersions7d, integration7d, cost, settings] = await Promise.all([
       Promise.all(projects.map((p) => this.summary(p))),
-      this.prisma.build.findMany({ where: { status: { in: ['queued', 'running'] } }, orderBy: { createdAt: 'asc' }, include: buildInclude }),
-      this.audit_(10),
-      this.prisma.build.count({ where: { createdAt: { gte: weekAgo }, packageVerified: false } }),
-      this.prisma.version.count({ where: { releasedAt: { gte: weekAgo } } }),
-      this.prisma.build.count({ where: { createdAt: { gte: weekAgo }, integrationVerified: 'yes' } }),
+      this.prisma.build.findMany({ where: { status: { in: ['queued', 'running'] }, ...mine }, orderBy: { createdAt: 'asc' }, include: buildInclude }),
+      this.audit_(10, ids),
+      this.prisma.build.count({ where: { createdAt: { gte: weekAgo }, packageVerified: false, ...mine } }),
+      this.prisma.version.count({ where: { releasedAt: { gte: weekAgo }, ...mine } }),
+      this.prisma.build.count({ where: { createdAt: { gte: weekAgo }, integrationVerified: 'yes', ...mine } }),
+      // Workspace-wide on purpose: it is compared with the workspace monthly budget.
       this.prisma.build.aggregate({ where: { createdAt: { gte: monthStart } }, _sum: { costUsd: true } }),
       this.settings.get(),
     ]);
@@ -202,9 +224,10 @@ export class ProjectsService {
     };
   }
 
-  async audit_(limit = 100, projectId?: string): Promise<AuditDto[]> {
+  /** projectIds undefined = every entry; otherwise only entries tied to those projects. */
+  async audit_(limit = 100, projectIds?: string[]): Promise<AuditDto[]> {
     const rows = await this.prisma.auditLog.findMany({
-      where: projectId ? { meta: { path: ['projectId'], equals: projectId } } : undefined,
+      where: projectIds && { OR: projectIds.map((id) => ({ meta: { path: ['projectId'], equals: id } })) },
       orderBy: { at: 'desc' },
       take: limit,
     });
@@ -214,29 +237,40 @@ export class ProjectsService {
 
 @Controller()
 export class ProjectsController {
-  constructor(private readonly svc: ProjectsService, private readonly prisma: PrismaService, private readonly settings: SettingsService, private readonly audit: AuditService) {}
+  constructor(
+    private readonly svc: ProjectsService, private readonly prisma: PrismaService, private readonly settings: SettingsService,
+    private readonly audit: AuditService, private readonly access: AccessService,
+  ) {}
 
   @Get('dashboard') dashboard() { return this.svc.dashboard(); }
 
   @Get('projects')
   async list(@Query('archived') archived?: string): Promise<ProjectSummary[]> {
-    const rows = await this.prisma.project.findMany({ where: archived === 'true' ? {} : { archivedAt: null }, orderBy: { createdAt: 'desc' } });
+    const ids = await this.svc.accessible();
+    const rows = await this.prisma.project.findMany({
+      where: { ...(archived !== 'true' && { archivedAt: null }), ...(ids && { id: { in: ids } }) }, orderBy: { createdAt: 'desc' },
+    });
     return Promise.all(rows.map((p) => this.svc.summary(p)));
   }
 
-  @Post('projects') create(@Body() body: unknown) { return this.svc.create(body); }
-  @Get('projects/:id') detail(@Param('id') id: string) { return this.svc.detail(id); }
-  @Patch('projects/:id') update(@Param('id') id: string, @Body() body: unknown) { return this.svc.update(id, body); }
-  @Post('projects/:id/archive') archive(@Param('id') id: string) { return this.svc.archive(id); }
-  @Get('projects/:id/context') getContext(@Param('id') id: string) { return this.svc.getContext(id); }
-  @Put('projects/:id/context') putContext(@Param('id') id: string, @Body() body: unknown) { return this.svc.putContext(id, body); }
-  @Get('projects/:id/conflicts') conflicts(@Param('id') id: string) { return this.svc.conflicts(id); }
+  @Perm('projects.create') @Post('projects') create(@Body() body: unknown) { return this.svc.create(body); }
+  @Perm('member', 'project') @Get('projects/:id') detail(@Param('id') id: string) { return this.svc.detail(id); }
+  @Perm('project.edit', 'project') @Patch('projects/:id') update(@Param('id') id: string, @Body() body: unknown) { return this.svc.update(id, body); }
+  @Perm('project.edit', 'project') @Post('projects/:id/archive') archive(@Param('id') id: string) { return this.svc.archive(id); }
+  @Perm('member', 'project') @Get('projects/:id/context') getContext(@Param('id') id: string) { return this.svc.getContext(id); }
+  @Perm('context.edit', 'project') @Put('projects/:id/context') putContext(@Param('id') id: string, @Body() body: unknown) { return this.svc.putContext(id, body); }
+  @Perm('member', 'project') @Get('projects/:id/conflicts') conflicts(@Param('id') id: string) { return this.svc.conflicts(id); }
 
-  @Get('audit') auditLog(@Query('projectId') projectId?: string) { return this.svc.audit_(200, projectId); }
+  @Get('audit')
+  async auditLog(@Query('projectId') projectId?: string) {
+    if (projectId) await this.access.assertProject(projectId, 'member');
+    else if (!currentUser()!.permissions.includes('audit.read')) throw new ForbiddenException('Requires permission audit.read');
+    return this.svc.audit_(200, projectId ? [projectId] : undefined);
+  }
 
   @Get('settings') getSettings(): Promise<SettingsDto> { return this.settings.get(); }
 
-  @Put('settings')
+  @Perm('settings.manage') @Put('settings')
   async putSettings(@Body() body: unknown): Promise<SettingsDto> {
     const input = parse(settingsSchema, body);
     if (!Object.keys(input).length) throw new BadRequestException('No changes');

@@ -1,6 +1,7 @@
 import { BadRequestException, Body, Controller, Delete, Get, Module, NotFoundException, Param, Patch, Post } from '@nestjs/common';
 import { z } from 'zod';
 import type { ConnectionCheck, ConnectionDto } from '@mcp-builder/shared';
+import { Perm } from '../auth/guards.js';
 import { AuditService } from '../core/core.services.js';
 import { toConnectionDto } from '../core/mappers.js';
 import { PrismaService } from '../core/prisma.service.js';
@@ -44,12 +45,12 @@ export function authHeaders(c: Pick<Connection, 'authType' | 'authHeader' | 'sec
 export class ConnectionsController {
   constructor(private readonly prisma: PrismaService, private readonly audit: AuditService) {}
 
-  @Get('projects/:id/connections')
+  @Perm('member', 'project') @Get('projects/:id/connections')
   async list(@Param('id') projectId: string): Promise<ConnectionDto[]> {
     return (await this.prisma.connection.findMany({ where: { projectId }, orderBy: { createdAt: 'asc' } })).map(toConnectionDto);
   }
 
-  @Post('projects/:id/connections')
+  @Perm('connections.manage', 'project') @Post('projects/:id/connections')
   async create(@Param('id') projectId: string, @Body() body: unknown): Promise<ConnectionDto> {
     const input = parse(createSchema, body);
     if (input.authType !== 'none' && !input.secretRef) throw new BadRequestException('This auth type needs a secretRef');
@@ -63,7 +64,7 @@ export class ConnectionsController {
     return toConnectionDto(c);
   }
 
-  @Patch('connections/:id')
+  @Perm('connections.manage', 'connection') @Patch('connections/:id')
   async update(@Param('id') id: string, @Body() body: unknown): Promise<ConnectionDto> {
     const input = parse(updateSchema, body);
     const cur = await this.prisma.connection.findUnique({ where: { id } });
@@ -79,14 +80,14 @@ export class ConnectionsController {
     return toConnectionDto(c);
   }
 
-  @Delete('connections/:id')
+  @Perm('connections.manage', 'connection') @Delete('connections/:id')
   async remove(@Param('id') id: string) {
     const c = await this.prisma.connection.delete({ where: { id } }).catch(() => { throw new NotFoundException('Environment not found'); });
     await this.audit.log('connection.delete', c.name, { projectId: c.projectId });
     return { ok: true };
   }
 
-  @Post('connections/:id/test')
+  @Perm('connections.manage', 'connection') @Post('connections/:id/test')
   async test(@Param('id') id: string): Promise<ConnectionDto> {
     const c = await this.prisma.connection.findUnique({ where: { id } });
     if (!c) throw new NotFoundException('Environment not found');
