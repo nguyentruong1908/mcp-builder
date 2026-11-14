@@ -36,7 +36,7 @@ export default function QaPage() {
       <PageHeader title="QA report" description="Verdicts come from tests that actually ran, never from a model-written report."
         actions={withQa.length > 0 && <>
           <button className="btn btn-primary btn-sm" disabled={!codeBuild || running || sel?.stages.build !== 'ok' || !qaPerm.ok}
-            title={qaPerm.title ?? running ? 'A build is running' : sel?.stages.build !== 'ok' ? 'The selected build has no compiled code' : undefined}
+            title={qaPerm.title ?? (running ? 'A build is running' : sel?.stages.build !== 'ok' ? 'The selected build has no compiled code' : undefined)}
             onClick={() => setQaOpen(true)}><FlaskConical className="size-3.5" />Run QA</button>
           <select className="input h-8 w-auto text-xs" aria-label="Select build" value={selected ?? ''} onChange={(e) => router.replace(`/projects/${id}/qa?build=${e.target.value}`)}>
             {buildParam && !withQa.some((b) => b.id === buildParam) && <option value={buildParam}>{buildParam}</option>}
