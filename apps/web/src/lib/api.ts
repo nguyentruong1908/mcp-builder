@@ -1,4 +1,4 @@
-import type * as T from '@mcp-factory/shared';
+import type * as T from '@mcp-builder/shared';
 
 export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api').replace(/\/$/, '');
 

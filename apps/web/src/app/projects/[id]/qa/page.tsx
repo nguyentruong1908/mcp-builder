@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Bot, CircleDashed, CircleX, Download, FlaskConical, Info, ListChecks, Lock, PackageCheck, PackageX, Plug, Scale, ShieldCheck } from 'lucide-react';
-import type { QaLayer, QaReport, TestStepResult } from '@mcp-factory/shared';
+import type { QaLayer, QaReport, TestStepResult } from '@mcp-builder/shared';
 import { absUrl, api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { cn, fmtDate, isActive, LAYERS, layerMeta, qaMeta, verdictMeta } from '@/lib/utils';

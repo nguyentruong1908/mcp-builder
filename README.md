@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="brand/logo-wordmark.svg" alt="MCP Factory" height="56">
+  <img src="brand/logo-wordmark.svg" alt="MCP Builder" height="56">
 </p>
 
 <p align="center">
@@ -12,11 +12,11 @@
 
 Teams that want agents to work with their ERP, CRM or internal services usually hand-write MCP servers per API. That is slow, uneven in quality, and hard to trust: nobody can say what was tested, against which spec, with which generator.
 
-MCP Factory makes that a repeatable product workflow:
+MCP Builder makes that a repeatable product workflow:
 
 - **From the spec you already have.** Import OpenAPI 3.0, add business context, pick the operations agents may use.
 - **Generated, not hand-written.** Codex writes the per-tool adapters on top of a tested runtime, so the generated surface stays small.
-- **Evidence over claims.** The Factory runs its own QA suite against the package. A report written by a model never counts as a test result, and a mock pass is never reported as an integration pass.
+- **Evidence over claims.** MCP Builder runs its own QA suite against the package. A report written by a model never counts as a test result, and a mock pass is never reported as an integration pass.
 - **Traceable versions.** Every package records the spec, context, tools, template, Codex model and profile it was built from.
 
 ## Screenshots
@@ -57,7 +57,7 @@ MCP Factory makes that a repeatable product workflow:
 |---|---|
 | Input / build | Tool definitions, TypeScript build, secret scan |
 | Interface | MCP `tools/list` matches the definitions; CLI help, exit codes, JSON output |
-| Contract | Each tool against a Factory-built mock: method, path, query, body, auth |
+| Contract | Each tool against a built-in mock: method, path, query, body, auth |
 | Error handling | 401/404/500 and malformed responses become clear `isError` results |
 | Runtime | Retries only for reads, timeouts |
 | Integration | Read tools on the live QA environment; write tools only through user-written live test cases |
@@ -71,17 +71,17 @@ Two labels come out of it: **Package verified** (the artifact behaves correctly)
 
 Any *Package verified* build can be deployed from the **Deploy** page, a build, or a version. Downloading the package keeps working as before.
 
-- The Factory installs the exact tarball users would download and runs it in Streamable HTTP mode on a loopback port.
-- Agents reach it at `<PUBLIC_URL>/mcp/<project-slug>` with a bearer token. The token is shown once; the Factory stores only its hash and can rotate it.
+- MCP Builder installs the exact tarball users would download and runs it in Streamable HTTP mode on a loopback port.
+- Agents reach it at `<PUBLIC_URL>/mcp/<project-slug>` with a bearer token. The token is shown once; MCP Builder stores only its hash and can rotate it.
 - The server calls your API with the credentials of the environment you pick (for example `prod`).
 - The page gives copyable setup for Claude Code, Codex CLI, generic MCP client JSON, a `curl` check, and an instruction block to paste into an agent's prompt.
 - Redeploying a newer build keeps the URL and token, so connected agents keep working. Deployments restart automatically with the API; stop, start, rotate, logs and removal are on the same page.
 
-Deployed servers run inside the `api` container, next to the Factory. Put the gateway behind TLS before exposing endpoints beyond localhost.
+Deployed servers run inside the `api` container, next to MCP Builder. Put the gateway behind TLS before exposing endpoints beyond localhost.
 
 ### Tuning generation per team
 
-A **generation profile** sets the Codex model, reasoning effort, and team rules. Rules are written to `AGENTS.md` in the build workspace; they can refine style (error message wording, response shaping) but cannot loosen fixed guardrails, which the Factory enforces in code (Codex may only edit adapters and the README; no network; no secrets; no new dependencies). Projects can override the workspace profile, and every build records the profile version and rules hash.
+A **generation profile** sets the Codex model, reasoning effort, and team rules. Rules are written to `AGENTS.md` in the build workspace; they can refine style (error message wording, response shaping) but cannot loosen fixed guardrails, which MCP Builder enforces in code (Codex may only edit adapters and the README; no network; no secrets; no new dependencies). Projects can override the workspace profile, and every build records the profile version and rules hash.
 
 ## Architecture
 
@@ -106,7 +106,6 @@ browser ───▶│  /        → web (Next.js 16, React 19, Tailwind 4)    
 | `deploy/` | Gateway configuration |
 | `docs/design.md` | Technical design: data model, API, pipeline, QA rules |
 | `brand/` | Logo, generated with Codex CLI |
-| `ui-draft/` | The original single-file UI concept |
 
 ## Quick start (Docker)
 
@@ -120,7 +119,7 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-Open `http://localhost:8080`, go to **Settings › Codex** and sign in. Device-code sign-in is recommended: the server shows a link and a one-time code you confirm in any browser. You can also save an API key or upload an `auth.json` from `codex login`. Credentials stay in the `factory-data` volume and are never returned by the API.
+Open `http://localhost:8080`, go to **Settings › Codex** and sign in. Device-code sign-in is recommended: the server shows a link and a one-time code you confirm in any browser. You can also save an API key or upload an `auth.json` from `codex login`. Credentials stay in the `builder-data` volume and are never returned by the API.
 
 Secrets for QA environments go in an optional `secrets.env` (see `secrets.env.example`) and are referenced from connections as `env://NAME`.
 
@@ -128,7 +127,7 @@ Secrets for QA environments go in an optional `secrets.env` (see `secrets.env.ex
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `MCP_FACTORY_BIND` | `127.0.0.1:8080` | Where the gateway listens |
+| `MCP_BUILDER_BIND` | `127.0.0.1:8080` | Where the gateway listens |
 | `POSTGRES_PASSWORD` | `mcp` | Database password |
 | `CODEX_MODEL` | `gpt-6-sol` | Default model when no profile sets one |
 | `CODEX_SANDBOX` | `danger-full-access` | Codex sandbox mode (see below) |
@@ -137,7 +136,7 @@ Secrets for QA environments go in an optional `secrets.env` (see `secrets.env.ex
 
 **Codex sandbox in Docker.** Codex sandboxes its own commands with bubblewrap, which needs user namespaces that Docker's default seccomp profile blocks. The compose file therefore runs Codex with `danger-full-access`, making the `api` container the isolation boundary. Alternatives: give the `api` service `security_opt: [seccomp=unconfined, apparmor=unconfined]` and set `CODEX_SANDBOX=workspace-write`, or maintain a custom seccomp profile that allows `unshare`.
 
-**Exposing it beyond localhost.** This version has no user accounts: anyone who reaches the port can manage the Codex sign-in and run builds. Put it behind a reverse proxy with TLS and authentication (or a VPN) before changing `MCP_FACTORY_BIND`.
+**Exposing it beyond localhost.** This version has no user accounts: anyone who reaches the port can manage the Codex sign-in and run builds. Put it behind a reverse proxy with TLS and authentication (or a VPN) before changing `MCP_BUILDER_BIND`.
 
 ## Local development
 
@@ -187,7 +186,7 @@ pnpm --filter api build && pnpm --filter api test
 - [ ] Profile comparison: same project, two profiles, compare QA scores, cost and time
 - [ ] Golden example adapters per team
 - [ ] Automated pagination and idempotency checks
-- [ ] Private-network runner for APIs that are not reachable from the Factory
+- [ ] Private-network runner for APIs that are not reachable from MCP Builder
 
 **Later**
 - [ ] Hosting at scale: one container per deployment, custom domains/TLS, usage quotas and metrics

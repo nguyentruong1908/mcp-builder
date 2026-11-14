@@ -1,6 +1,6 @@
 import { Global, Injectable, Module } from '@nestjs/common';
 import { EventEmitter } from 'node:events';
-import type { BuildEvent, SettingsDto } from '@mcp-factory/shared';
+import type { BuildEvent, SettingsDto } from '@mcp-builder/shared';
 import { config, DEFAULT_SETTINGS } from '../config.js';
 import { PrismaService } from './prisma.service.js';
 import type { Prisma } from '../generated/prisma/client.js';

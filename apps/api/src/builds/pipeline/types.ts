@@ -1,4 +1,4 @@
-import type { EffectiveGeneration, Impact, QaLayer, QaStatus, StageName, StageState, ToolParam } from '@mcp-factory/shared';
+import type { EffectiveGeneration, Impact, QaLayer, QaStatus, StageName, StageState, ToolParam } from '@mcp-builder/shared';
 
 /** Tool definition frozen into a Version at export time; also written to factory/tools.json. */
 export interface ToolSnapshot {

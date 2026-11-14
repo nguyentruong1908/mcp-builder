@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Copy, ExternalLink, FileJson, KeyRound, LogOut, MonitorSmartphone, ShieldAlert, TriangleAlert } from 'lucide-react';
-import type { CodexAuthStatus } from '@mcp-factory/shared';
+import type { CodexAuthStatus } from '@mcp-builder/shared';
 import { api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { fmtDate } from '@/lib/utils';
@@ -39,12 +39,12 @@ function StatusCard({ s, onChange }: { s: CodexAuthStatus; onChange: (s: CodexAu
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   async function logout() {
-    if (!confirm('Sign Codex out of Factory? New builds will not run until you sign in again.')) return;
+    if (!confirm('Sign Codex out of MCP Builder? New builds will not run until you sign in again.')) return;
     setBusy(true);
     try { onChange(await api.codexLogout()); toast('Codex signed out'); } finally { setBusy(false); }
   }
   const rows: [string, React.ReactNode][] = [
-    ['Source', s.source === 'env_api_key' ? 'CODEX_API_KEY environment variable' : s.source === 'auth_file' ? "auth.json in Factory's CODEX_HOME" : '—'],
+    ['Source', s.source === 'env_api_key' ? 'CODEX_API_KEY environment variable' : s.source === 'auth_file' ? "auth.json in MCP Builder's CODEX_HOME" : '—'],
     ['Type', s.mode === 'chatgpt' ? 'ChatGPT account' : s.mode === 'api_key' ? 'API key' : '—'],
     ['Account', s.email ?? '—'],
     ['Plan', s.plan ?? '—'],
@@ -57,7 +57,7 @@ function StatusCard({ s, onChange }: { s: CodexAuthStatus; onChange: (s: CodexAu
     <Card className="h-fit">
       <CardHeader
         title="Codex status"
-        description="The account Factory uses to generate code in builds"
+        description="The account MCP Builder uses to generate code in builds"
         actions={s.configured ? <Badge tone="success"><CheckCircle2 className="size-3" />Signed in</Badge> : <Badge tone="danger">Not signed in</Badge>}
       />
       <dl className="kv px-5 pb-5">
@@ -82,7 +82,7 @@ function LoginCard({ s, onChange }: { s: CodexAuthStatus; onChange: (s: CodexAut
   const [method, setMethod] = useState<Method>('device');
   return (
     <Card>
-      <CardHeader title={s.configured ? 'Switch Codex account' : 'Sign in to Codex'} description="Credentials are stored in Factory's data volume (CODEX_HOME), never in the database, and are never shown again." />
+      <CardHeader title={s.configured ? 'Switch Codex account' : 'Sign in to Codex'} description="Credentials are stored in MCP Builder's data volume (CODEX_HOME), never in the database, and are never shown again." />
       <div className="px-5">
         <Tabs value={method} onChange={setMethod} tabs={[
           { id: 'device', label: <span className="inline-flex items-center gap-1.5"><MonitorSmartphone className="size-3.5" />ChatGPT</span> },
@@ -149,7 +149,7 @@ function DeviceLogin({ s, onChange }: { s: CodexAuthStatus; onChange: (s: CodexA
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">Factory runs <code className="mono">codex login --device-auth</code> on the server. You sign in to ChatGPT from any browser with a one-time code; no Codex install needed on your machine. Best when Factory runs in Docker or on a server.</p>
+      <p className="text-sm text-muted-foreground">MCP Builder runs <code className="mono">codex login --device-auth</code> on the server. You sign in to ChatGPT from any browser with a one-time code; no Codex install needed on your machine. Best when MCP Builder runs in Docker or on a server.</p>
       {d.state === 'success' && <div className="alert alert-info"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" /><div>The last sign-in succeeded.</div></div>}
       {d.state === 'failed' && <InlineError error={`Sign-in failed: ${d.error ?? 'unknown error'}`} />}
       {d.state === 'cancelled' && <p className="text-sm text-muted-foreground">The previous sign-in was cancelled.</p>}
@@ -193,7 +193,7 @@ function UploadAuth({ onChange }: { onChange: (s: CodexAuthStatus) => void }) {
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">Run <code className="mono">codex login</code> on a machine with a browser, then upload <code className="mono">~/.codex/auth.json</code>.</p>
-      <div className="alert alert-warning"><TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" /><div>If this file is still in use on another machine, a token refresh on one side can sign the other out. Prefer a dedicated sign-in for Factory, or use <b>ChatGPT sign-in</b>.</div></div>
+      <div className="alert alert-warning"><TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" /><div>If this file is still in use on another machine, a token refresh on one side can sign the other out. Prefer a dedicated sign-in for MCP Builder, or use <b>ChatGPT sign-in</b>.</div></div>
       <Field label="auth.json">
         {(id) => <input id={id} type="file" accept="application/json,.json" className="input h-auto py-1.5 text-xs file:mr-3 file:rounded file:border-0 file:bg-muted file:px-2 file:py-1 file:text-foreground" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />}
       </Field>

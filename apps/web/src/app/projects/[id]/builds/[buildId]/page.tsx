@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { CircleCheck, CircleDashed, CircleMinus, CircleX, Download, FileCheck2, FileJson, FlaskConical, Loader2, Package, Rocket, Square } from 'lucide-react';
-import type { BuildEvent, BuildLogDto, StageState } from '@mcp-factory/shared';
+import type { BuildEvent, BuildLogDto, StageState } from '@mcp-builder/shared';
 import { absUrl, api, buildEventsUrl } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { cn, fmtBytes, fmtDate, fmtDuration, fmtNum, fmtUsd, isActive, shortHash, STAGES, stageLabel } from '@/lib/utils';

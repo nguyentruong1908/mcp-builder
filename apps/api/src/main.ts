@@ -27,7 +27,7 @@ async function bootstrap() {
   app.enableCors({ origin: config.webOrigin.split(',') });
   app.enableShutdownHooks();
   await app.listen(config.port);
-  console.log(`MCP Factory API on http://localhost:${config.port}/api · data: ${config.dataDir} · codex model: ${config.codexModel}`);
+  console.log(`MCP Builder API on http://localhost:${config.port}/api · data: ${config.dataDir} · codex model: ${config.codexModel}`);
 }
 
 void bootstrap();

@@ -2,7 +2,7 @@ import { BadRequestException, Body, Controller, Get, Injectable, Module, NotFoun
 import { z } from 'zod';
 import type {
   AuditDto, ConflictDto, ContextDto, DashboardDto, GlossaryEntry, ProjectDetail, ProjectStep, ProjectSummary, SettingsDto,
-} from '@mcp-factory/shared';
+} from '@mcp-builder/shared';
 import { AuditService, SettingsService } from '../core/core.services.js';
 import { buildInclude, toBuildSummary, toVersionSummary } from '../core/mappers.js';
 import { PrismaService } from '../core/prisma.service.js';

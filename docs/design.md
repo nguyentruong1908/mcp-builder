@@ -1,4 +1,4 @@
-# MCP Factory: Technical Design
+# MCP Builder: Technical Design
 
 This document describes how the MVP is built. The README covers goals, setup, and the roadmap.
 
@@ -37,7 +37,7 @@ data/ (outside the DB): build workspaces, artifacts, Codex home (auth.json)
 
 **Principles enforced in code (not only in prompts):**
 - Codex may only change `src/adapters/` and `README.md`. Any other change is reverted after each Codex turn. Spec and context reach Codex as data files, never as instructions.
-- The QA runner is written by the Factory and never relies on tests produced by Codex. A mock pass is never reported as an integration pass.
+- The QA runner is written by MCP Builder and never relies on tests produced by Codex. A mock pass is never reported as an integration pass.
 - Missing environments or credentials produce `not_run` / `blocked` with a reason, never `pass`.
 - Credentials are stored only as references (`env://VAR_NAME`). Values are read from the API environment at run time and redacted from logs and evidence. Build subprocesses get a minimal environment.
 - Spec URLs are fetched only from `SPEC_FETCH_ALLOWLIST`; external `$ref`s are rejected.
@@ -121,7 +121,7 @@ Response types live in `packages/shared/src/index.ts`.
 | input | Tool definitions are well formed |
 | build | tsc result and secret scan |
 | interface | MCP `tools/list` matches the selected tools and schemas; CLI `--help`, unknown command → exit 2, `--json` output |
-| contract | A Factory mock built from the spec; each tool is called with sample arguments; method, path, query, body and auth are checked |
+| contract | A built-in mock derived from the spec; each tool is called with sample arguments; method, path, query, body and auth are checked |
 | error | Mock returns 401/404/500 and malformed JSON; the tool must return `isError` with the right category |
 | runtime | Retries on 429 for read tools only, timeout handling; pagination and idempotency are `not_run` in the MVP |
 | integration | Read tools are called on the live QA environment with sample arguments; write tools are credited only by live test cases |
@@ -133,7 +133,7 @@ Response types live in `packages/shared/src/index.ts`.
 
 **Deployments (optional):** a Package verified build can be deployed. The API installs its tarball under `data/deployments/<slug>/<build>/`, runs `mcp.js --http <port>` on loopback with the chosen environment's credentials, and proxies `/mcp/<slug>` to it after checking a bearer token (only its sha256 is stored). One deployment per project; redeploy swaps the build and keeps the URL and token. Desired state is persisted, so deployments restart with the API.
 
-**Agent eval permissions:** on a live environment the agent sees read tools only, unless the connection grants `write` or `write_destructive`. The agent runs with the deployment sandbox and auto-approved tool calls. The Factory does not clean up data the agent creates; the agent decides and reports it.
+**Agent eval permissions:** on a live environment the agent sees read tools only, unless the connection grants `write` or `write_destructive`. The agent runs with the deployment sandbox and auto-approved tool calls. MCP Builder does not clean up data the agent creates; the agent decides and reports it.
 
 ## 6. Versions
 

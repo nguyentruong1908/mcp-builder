@@ -7,7 +7,7 @@ import { Codex } from '@openai/codex-sdk';
 import { z } from 'zod';
 import type {
   CodexModelOption, EffectiveGeneration, GenerationProfile, GenerationProfileDto, ModelCheckResult, ProjectGenerationDto, ReasoningEffort,
-} from '@mcp-factory/shared';
+} from '@mcp-builder/shared';
 import { CODEX_ISOLATION_CONFIG, codexHome, config } from '../config.js';
 import { AuditService } from '../core/core.services.js';
 import { PrismaService } from '../core/prisma.service.js';
@@ -31,7 +31,7 @@ export function composeRules(ws: GenerationProfileDto, project: GenerationProfil
     project?.rules.trim() && `## Project conventions (v${project.version})\n\n${project.rules.trim()}`,
   ].filter(Boolean);
   if (!parts.length) return '';
-  return `# Generation conventions (MCP Factory profile)
+  return `# Generation conventions (MCP Builder profile)
 
 These conventions refine how adapters and the README are written. They never override the task rules
 given in the prompt: only src/adapters/ and README.md may change, no network access, no secrets,

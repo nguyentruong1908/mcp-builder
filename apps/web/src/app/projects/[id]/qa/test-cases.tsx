@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { ArrowDown, ArrowUp, Bot, Info, ListChecks, ListOrdered, Pencil, Plus, Trash2, Wrench } from 'lucide-react';
-import type { TestCaseDto, TestStep, ToolDto, UpsertTestCaseInput } from '@mcp-factory/shared';
+import type { TestCaseDto, TestStep, ToolDto, UpsertTestCaseInput } from '@mcp-builder/shared';
 import { api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { cn } from '@/lib/utils';
@@ -220,7 +220,7 @@ function TestCaseForm({ projectId, tools, initial, onClose, onSaved }: { project
                   </select>
                 )}
               </Field>
-              <Field label="Environment" hint={target === 'live' ? 'Calls the live API through the "Use for QA" connection. Write tools only run when the environment allows writes.' : 'Factory mock API; the response can be simulated.'}>
+              <Field label="Environment" hint={target === 'live' ? 'Calls the live API through the "Use for QA" connection. Write tools only run when the environment allows writes.' : 'Built-in mock API; the response can be simulated.'}>
                 {(id) => (
                   <select id={id} className="input" value={target} onChange={(e) => setTarget(e.target.value as TestCaseDto['target'])}>
                     <option value="mock">Mock</option>
@@ -314,7 +314,7 @@ function StepsEditor({ tools, steps, setSteps, target, setTarget }: {
         </div>
       </div>
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <Field label="Environment" hint={target === 'live' ? 'Live API through the "Use for QA" connection; steps calling write tools need an environment that allows writes.' : 'Factory mock API.'}>
+        <Field label="Environment" hint={target === 'live' ? 'Live API through the "Use for QA" connection; steps calling write tools need an environment that allows writes.' : 'Built-in mock API.'}>
           {(id) => (
             <select id={id} className="input w-auto" value={target} onChange={(e) => setTarget(e.target.value as TestCaseDto['target'])}>
               <option value="mock">Mock</option>

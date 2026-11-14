@@ -10,7 +10,7 @@ import { BuildAbort, type BuildCtx, type QaRow } from './types.js';
 
 export const AGENT_EVAL_MAX_TASKS = Number(process.env.AGENT_EVAL_MAX_TASKS) || 5;
 const TASK_TIMEOUT_MS = 4 * 60_000;
-const SERVER = 'factory';
+const SERVER = 'tools';
 
 export interface SampleTask { text: string; expected: string[]; answerContains?: string[]; label?: string }
 
@@ -59,7 +59,7 @@ export async function runAgentEval(ctx: BuildCtx, tasks: SampleTask[]): Promise<
   const toolRows = (status: QaRow['status'], detail: string) => ctx.tools.map((t) => ({ layer: 'agent' as const, tool: t.name, name: 'Agent task evaluation', status, detail }));
   if (!tasks.length) return toolRows('not_run', 'The context has no sample tasks ("Sample tasks" field)');
 
-  // Environment: real API (read tools; write tools only if the env allows writes) or the Factory mock.
+  // Environment: real API (read tools; write tools only if the env allows writes) or the built-in mock.
   const conn = ctx.qaConnection;
   const secret = conn ? resolveSecret(conn.secretRef) : undefined;
   const live = !!conn && ctx.runIntegration && (conn.authType === 'none' || !!secret);
@@ -79,7 +79,7 @@ export async function runAgentEval(ctx: BuildCtx, tasks: SampleTask[]): Promise<
     env.API_BASE_URL = mock.url;
     env.API_TOKEN = 'qa-token';
   }
-  const envLabel = live ? `live API (${conn!.name})` : 'Factory mock API';
+  const envLabel = live ? `live API (${conn!.name})` : 'built-in mock API';
   await ctx.log('info', 'qa', `Agent eval: ${Math.min(tasks.length, AGENT_EVAL_MAX_TASKS)} tasks · ${envLabel} · access ${access} · tools: ${enabled.join(', ')}`);
 
   const codex = new Codex({
@@ -94,7 +94,7 @@ export async function runAgentEval(ctx: BuildCtx, tasks: SampleTask[]): Promise<
           args: [join(ctx.ws, 'dist/mcp.js')],
           env_vars: Object.keys(env),
           enabled_tools: enabled,
-          // Factory already restricts which tools the agent sees (writes only when the env allows them); Codex must not block them.
+          // MCP Builder already restricts which tools the agent sees (writes only when the env allows them); Codex must not block them.
           default_tools_approval_mode: 'approve',
           startup_timeout_sec: 30,
           tool_timeout_sec: 60,

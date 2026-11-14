@@ -21,13 +21,13 @@ export const config = {
   publicUrl: (process.env.PUBLIC_URL ?? `http://localhost:${num(process.env.PORT, 4000)}`).replace(/\/$/, ''),
 };
 
-/** Factory-managed Codex home (auth.json lives here, never in the DB). */
+/** Platform-managed Codex home (auth.json lives here, never in the DB). */
 export const codexHome = resolve(apiRoot, process.env.CODEX_HOME_DIR ?? `${config.dataDir}/codex-home`);
 /** workspace-write (default) or danger-full-access when the container itself is the isolation boundary. */
 export const codexSandbox = (process.env.CODEX_SANDBOX === 'danger-full-access' ? 'danger-full-access' : 'workspace-write') as 'workspace-write' | 'danger-full-access';
 
 /**
- * Codex features turned off for every Factory-driven Codex run: plugins, marketplace skills and apps
+ * Codex features turned off for every platform-driven Codex run: plugins, marketplace skills and apps
  * would otherwise be pulled into builds, costing tokens and making output depend on the account's catalog.
  */
 export const CODEX_ISOLATION_CONFIG = { features: { plugins: false, remote_plugin: false, plugin_discovery_prefetch: false, apps: false } };

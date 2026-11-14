@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: Sample ERP Sales API
   version: 4.3.0
-  description: Demo ERP API used to try MCP Factory end to end.
+  description: Demo ERP API used to try MCP Builder end to end.
 servers:
   - url: http://localhost:4010
 security:

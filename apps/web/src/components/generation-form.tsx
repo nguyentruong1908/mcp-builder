@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { CheckCircle2, FlaskConical, Sparkles } from 'lucide-react';
-import type { CodexModelOption, GenerationProfile, ModelCheckResult, ReasoningEffort } from '@mcp-factory/shared';
+import type { CodexModelOption, GenerationProfile, ModelCheckResult, ReasoningEffort } from '@mcp-builder/shared';
 import { api } from '@/lib/api';
 import { Field, InlineError, Spinner } from './ui';
 

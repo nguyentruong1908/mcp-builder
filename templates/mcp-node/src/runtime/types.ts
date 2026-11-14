@@ -8,7 +8,7 @@ export interface ToolParam {
   description: string;
 }
 
-/** One entry of factory/tools.json. Written by MCP Factory, never by Codex. */
+/** One entry of factory/tools.json. Written by MCP Builder, never by Codex. */
 export interface ToolDef {
   name: string;
   description: string;

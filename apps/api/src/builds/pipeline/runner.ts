@@ -1,6 +1,6 @@
 import { cp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join, sep } from 'node:path';
-import type { StageName, StageState } from '@mcp-factory/shared';
+import type { StageName, StageState } from '@mcp-builder/shared';
 import type { Thread } from '@openai/codex-sdk';
 import { codexSandbox, config } from '../../config.js';
 import { BuildEvents } from '../../core/core.services.js';
@@ -11,7 +11,7 @@ import type { Prisma } from '../../generated/prisma/client.js';
 import { codexAuthConfigured, codexAuthSource, codexSandboxError } from '../../codex/codex-auth.module.js';
 import { generationPrompt, isQaFixable, qaRepairPrompt, repairPrompt, runTurn, startThread } from './codex.js';
 import { effectiveOf } from '../../generation/generation.module.js';
-import type { EffectiveGeneration, GenerationProfileDto } from '@mcp-factory/shared';
+import type { EffectiveGeneration, GenerationProfileDto } from '@mcp-builder/shared';
 import { minimalEnv, run, tail } from './proc.js';
 import { parseSampleTasks } from './agent-eval.js';
 import { runQa, verdicts } from './qa.js';

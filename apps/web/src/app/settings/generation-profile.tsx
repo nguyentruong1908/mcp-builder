@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import type { GenerationProfile } from '@mcp-factory/shared';
+import type { GenerationProfile } from '@mcp-builder/shared';
 import { api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { fmtDate } from '@/lib/utils';

@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import type { Response } from 'express';
 import { Observable } from 'rxjs';
 import { z } from 'zod';
-import type { BuildDetail, BuildLogDto, BuildSummary, QaLayer, QaReport, QaStatus, VersionDto } from '@mcp-factory/shared';
+import type { BuildDetail, BuildLogDto, BuildSummary, QaLayer, QaReport, QaStatus, VersionDto } from '@mcp-builder/shared';
 import { config } from '../config.js';
 import { AuditService, BuildEvents, SettingsService } from '../core/core.services.js';
 import { buildInclude, buildLabel, toArtifactDto, toBuildSummary, toVersionSummary } from '../core/mappers.js';

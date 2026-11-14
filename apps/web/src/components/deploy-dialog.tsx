@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Rocket, TriangleAlert } from 'lucide-react';
-import type { DeployResult } from '@mcp-factory/shared';
+import type { DeployResult } from '@mcp-builder/shared';
 import { api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { fmtDate } from '@/lib/utils';

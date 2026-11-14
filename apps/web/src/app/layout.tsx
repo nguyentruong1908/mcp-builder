@@ -9,7 +9,7 @@ const plex = IBM_Plex_Sans({ variable: '--font-plex', subsets: ['latin', 'vietna
 const mono = JetBrains_Mono({ variable: '--font-jetbrains', subsets: ['latin', 'vietnamese'], weight: ['400', '500', '600'] });
 
 export const metadata: Metadata = {
-  title: { default: 'MCP Factory', template: '%s · MCP Factory' },
+  title: { default: 'MCP Builder', template: '%s · MCP Builder' },
   description: 'Turn existing APIs into MCP servers and CLIs for AI agents.',
 };
 

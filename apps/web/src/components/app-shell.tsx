@@ -62,7 +62,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="flex h-14 items-center gap-2.5 border-b px-4">
             <LogoMark className="size-8 text-foreground" />
             <div className="leading-tight">
-              <div className="text-sm font-semibold">MCP Factory</div>
+              <div className="text-sm font-semibold">MCP Builder</div>
               <div className="text-[11px] text-muted-foreground">Local workspace</div>
             </div>
             <span className="badge badge-outline ml-auto">beta</span>

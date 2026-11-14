@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Copy, Download, FileCheck2, FileJson, GitBranch, Globe, Package, Rocket, TriangleAlert } from 'lucide-react';
-import type { VersionDto } from '@mcp-factory/shared';
+import type { VersionDto } from '@mcp-builder/shared';
 import { absUrl, api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { copyText, fmtBytes, fmtDate, shortHash, versionStatusMeta } from '@/lib/utils';

@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { call, categoryOf, connect, textOf, type CallResult } from './mcp-client.js';
-import type { IntegrationVerdict, QaLayer, QaStatus } from '@mcp-factory/shared';
+import type { IntegrationVerdict, QaLayer, QaStatus } from '@mcp-builder/shared';
 import { resolveSecret } from '../../core/util.js';
 import { MockApi } from './mock-api.js';
 import { minimalEnv, run, tail } from './proc.js';
@@ -152,7 +152,7 @@ export async function runQa(ctx: BuildCtx): Promise<QaRow[]> {
       const extra = [...listed.keys()].filter((n) => !tools.some((t) => t.name === n));
       if (extra.length) add('interface', null, 'tools/list', 'fail', `Out-of-scope tools: ${extra.join(', ')}`);
 
-      // ---- contract: request mapping against the Factory mock
+      // ---- contract: request mapping against the built-in mock
       for (const t of tools) {
         const args = sampleArgs(t.inputSchema);
         mock.next();
@@ -231,7 +231,7 @@ export async function runQa(ctx: BuildCtx): Promise<QaRow[]> {
       add('runtime', null, 'Idempotency', 'not_run', 'Not covered in the MVP (no action needed): the runtime never retries writes, so it does not send duplicates.');
     }
 
-    // ---- custom test cases on the Factory mock
+    // ---- custom test cases on the built-in mock
     const known = new Set(tools.map((t) => t.name));
     for (const c of ctx.toolCases.filter((x) => x.target === 'mock')) {
       const caseTools = c.steps ? c.steps.map((s) => s.tool) : [c.tool];

@@ -199,7 +199,7 @@ export interface TestCaseDto {
   // tool_call
   tool: string | null;
   args: Record<string, unknown> | null;
-  target: 'mock' | 'live';                               // mock = Factory mock API, live = QA connection
+  target: 'mock' | 'live';                               // mock = built-in mock API, live = QA connection
   mockResponse: { status: number; body?: unknown } | null; // tool_call + mock: simulated upstream response
   expect: TestCaseExpect;
   // tool_steps

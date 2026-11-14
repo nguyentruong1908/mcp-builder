@@ -10,7 +10,7 @@ import { request, type IncomingMessage, type ServerResponse } from 'node:http';
 import { createServer } from 'node:net';
 import { join } from 'node:path';
 import { z } from 'zod';
-import type { DeployResult, DeploymentDto, DeploymentStatus } from '@mcp-factory/shared';
+import type { DeployResult, DeploymentDto, DeploymentStatus } from '@mcp-builder/shared';
 import { config } from '../config.js';
 import { AuditService } from '../core/core.services.js';
 import { buildLabel } from '../core/mappers.js';
@@ -22,7 +22,7 @@ import { buildInstructions } from './instructions.js';
 
 interface Proc { child: ChildProcess; port: number; logs: string[]; stopped: boolean }
 
-const newToken = () => `mcpf_${randomBytes(24).toString('base64url')}`;
+const newToken = () => `mcpb_${randomBytes(24).toString('base64url')}`;
 const freePort = () => new Promise<number>((ok, fail) => {
   const s = createServer().once('error', fail).listen(0, '127.0.0.1', () => {
     const port = (s.address() as { port: number }).port;

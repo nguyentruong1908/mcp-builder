@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
-  <title id="title">MCP Factory mark</title>
-  <path fill="#22c55e" d="M46 33h11v5H46zm0 11h11v5H46z"/>
-  <path fill="currentColor" fill-rule="evenodd" d="M8 28 21 18v10l13-10v10l13-10v33H8V28Zm8 2v5l8 4-8 4v4l12-6v-4L16 30Zm14 13v4h12v-4H30Z"/>
+  <title id="title">MCP Builder mark</title>
+  <path fill="currentColor" d="M14 30h11v13h13v7a6 6 0 0 1-6 6H14a6 6 0 0 1-6-6V36a6 6 0 0 1 6-6Z"/>
+  <path fill="#22c55e" d="M33 7h6v8h-6zM45 7h6v8h-6zM32 15h17a7 7 0 0 1 7 7v13a7 7 0 0 1-7 7H32a4 4 0 0 1-4-4V19a4 4 0 0 1 4-4Z"/>
 </svg>

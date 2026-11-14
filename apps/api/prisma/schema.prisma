@@ -286,7 +286,7 @@ model TestCase {
   @@index([projectId])
 }
 
-/** Optional managed hosting: the packaged MCP server of one build, run by the Factory behind /mcp/<slug>. */
+/** Optional managed hosting: the packaged MCP server of one build, run by MCP Builder behind /mcp/<slug>. */
 model Deployment {
   id           String    @id @default(cuid())
   projectId    String    @unique // one deployment per project; redeploy replaces the build

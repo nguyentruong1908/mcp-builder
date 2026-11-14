@@ -6,7 +6,7 @@ import { BuildAbort, type BuildCtx } from './types.js';
 
 export function startThread(ctx: BuildCtx): Thread {
   mkdirSync(codexHome, { recursive: true, mode: 0o700 });
-  // Always the Factory-managed CODEX_HOME: personal ~/.codex plugins/config never influence builds.
+  // Always the platform-managed CODEX_HOME: personal ~/.codex plugins/config never influence builds.
   const codex = new Codex({
     config: CODEX_ISOLATION_CONFIG,
     env: minimalEnv({ CODEX_HOME: codexHome }),
@@ -97,7 +97,7 @@ export function qaRepairPrompt(failures: { layer: string; tool: string | null; n
     const ev = f.evidence ? ` | evidence: ${JSON.stringify(f.evidence).slice(0, 500)}` : '';
     return `- [${f.layer}] ${f.tool ?? 'package'} · ${f.name}: ${f.detail.slice(0, 400)}${ev}`;
   });
-  return `MCP Factory ran its independent QA suite against the package and these checks failed:
+  return `MCP Builder ran its independent QA suite against the package and these checks failed:
 
 ${lines.join('\n')}${failures.length > 25 ? `\n… and ${failures.length - 25} more` : ''}
 

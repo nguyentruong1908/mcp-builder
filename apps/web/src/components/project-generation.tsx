@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import type { EffectiveGeneration, GenerationProfile } from '@mcp-factory/shared';
+import type { EffectiveGeneration, GenerationProfile } from '@mcp-builder/shared';
 import { api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { Badge, Card, CardHeader, InlineError, Loaded, Spinner, Switch } from './ui';

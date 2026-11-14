@@ -4,7 +4,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, wri
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { z } from 'zod';
-import type { CodexAuthStatus } from '@mcp-factory/shared';
+import type { CodexAuthStatus } from '@mcp-builder/shared';
 import { codexHome, codexSandbox, config } from '../config.js';
 import { AuditService } from '../core/core.services.js';
 import { parse } from '../core/util.js';

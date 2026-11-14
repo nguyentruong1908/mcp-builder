@@ -1,5 +1,5 @@
 {
-  "name": "mcp-factory",
+  "name": "mcp-builder",
   "private": true,
   "packageManager": "pnpm@9.15.4",
   "scripts": {

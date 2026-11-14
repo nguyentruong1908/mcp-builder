@@ -1,6 +1,6 @@
 import type {
   ArtifactDto, BuildSummary, ConnectionDto, IntegrationVerdict, SpecIssue, SpecSnapshotDto, StageName, StageState, ToolDto, ToolParam, VersionSummary,
-} from '@mcp-factory/shared';
+} from '@mcp-builder/shared';
 import type { Artifact, Build, Connection, SpecSnapshot, ToolDefinition, Version } from '../generated/prisma/client.js';
 import { iso, resolveSecret } from './util.js';
 

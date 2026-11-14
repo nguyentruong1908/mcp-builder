@@ -1,6 +1,6 @@
-# MCP Factory: full stack.  cp .env.example .env && docker compose up -d --build
+# MCP Builder: full stack.  cp .env.example .env && docker compose up -d --build
 # Open http://localhost:8080, then Settings › Codex to sign in.
-name: mcp-factory
+name: mcp-builder
 
 services:
   postgres:
@@ -8,14 +8,14 @@ services:
     environment:
       POSTGRES_USER: mcp
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mcp}
-      POSTGRES_DB: mcp_factory
+      POSTGRES_DB: mcp_builder
     volumes:
       - pgdata:/var/lib/postgresql/data
     # Published on loopback only so `pnpm dev` can use it too; remove for pure server deploys.
     ports:
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U mcp -d mcp_factory"]
+      test: ["CMD-SHELL", "pg_isready -U mcp -d mcp_builder"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -26,7 +26,7 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
     environment:
-      DATABASE_URL: postgresql://mcp:${POSTGRES_PASSWORD:-mcp}@postgres:5432/mcp_factory?schema=public
+      DATABASE_URL: postgresql://mcp:${POSTGRES_PASSWORD:-mcp}@postgres:5432/mcp_builder?schema=public
       WEB_ORIGIN: ${PUBLIC_URL:-http://localhost:8080}
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8080}   # base of deployed MCP endpoints (/mcp/<slug>)
       CODEX_MODEL: ${CODEX_MODEL:-gpt-6-sol}
@@ -38,7 +38,7 @@ services:
       - path: ./secrets.env
         required: false
     volumes:
-      - factory-data:/data   # build workspaces, artifacts and the Codex login (CODEX_HOME)
+      - builder-data:/data   # build workspaces, artifacts and the Codex login (CODEX_HOME)
     depends_on:
       postgres:
         condition: service_healthy
@@ -55,7 +55,7 @@ services:
   gateway:
     image: caddy:2-alpine
     ports:
-      - "${MCP_FACTORY_BIND:-127.0.0.1:8080}:80"
+      - "${MCP_BUILDER_BIND:-127.0.0.1:8080}:80"
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
     depends_on:
@@ -65,4 +65,4 @@ services:
 
 volumes:
   pgdata:
-  factory-data:
+  builder-data:

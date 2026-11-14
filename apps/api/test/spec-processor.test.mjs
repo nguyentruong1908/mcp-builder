@@ -117,7 +117,7 @@ test('deployment instructions and token check', async () => {
   assert.match(ins.find((i) => i.id === 'codex').content, /\[mcp_servers\.erp_sales\][\s\S]*bearer_token_env_var = "ERP_SALES_TOKEN"/);
   assert.equal(JSON.parse(ins.find((i) => i.id === 'json').content).mcpServers['erp-sales'].url, 'https://f.example/mcp/erp-sales');
   assert.match(ins.find((i) => i.id === 'agent-prompt').content, /`approve_order` \(side_effect, ask the user first\): Approve$/m);
-  assert.equal(tokenMatches('mcpf_abc', sha256('mcpf_abc')), true);
-  assert.equal(tokenMatches('mcpf_abd', sha256('mcpf_abc')), false);
-  assert.equal(tokenMatches('', sha256('mcpf_abc')), false);
+  assert.equal(tokenMatches('mcpb_abc', sha256('mcpb_abc')), true);
+  assert.equal(tokenMatches('mcpb_abd', sha256('mcpb_abc')), false);
+  assert.equal(tokenMatches('', sha256('mcpb_abc')), false);
 });

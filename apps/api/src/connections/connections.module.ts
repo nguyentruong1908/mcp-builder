@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Delete, Get, Module, NotFoundException, Param, Patch, Post } from '@nestjs/common';
 import { z } from 'zod';
-import type { ConnectionCheck, ConnectionDto } from '@mcp-factory/shared';
+import type { ConnectionCheck, ConnectionDto } from '@mcp-builder/shared';
 import { AuditService } from '../core/core.services.js';
 import { toConnectionDto } from '../core/mappers.js';
 import { PrismaService } from '../core/prisma.service.js';

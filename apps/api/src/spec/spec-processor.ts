@@ -1,6 +1,6 @@
 import SwaggerParser from '@apidevtools/swagger-parser';
 import YAML from 'yaml';
-import type { Impact, OpRef, SpecDiff, SpecIssue, ToolParam } from '@mcp-factory/shared';
+import type { Impact, OpRef, SpecDiff, SpecIssue, ToolParam } from '@mcp-builder/shared';
 import { sha256 } from '../core/util.js';
 
 type Obj = Record<string, any>;

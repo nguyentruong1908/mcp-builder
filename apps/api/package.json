@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@apidevtools/swagger-parser": "^13.1.0",
-    "@mcp-factory/shared": "workspace:*",
+    "@mcp-builder/shared": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.32.2",
     "@nestjs/common": "^12.5.0",
     "@nestjs/core": "^12.5.0",

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Info } from 'lucide-react';
-import type { SettingsDto } from '@mcp-factory/shared';
+import type { SettingsDto } from '@mcp-builder/shared';
 import { api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { fmtDate, initials } from '@/lib/utils';

@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import type { BuildStatus, DeploymentStatus, Impact, IntegrationVerdict, QaLayer, QaStatus, StageName, StageState, VersionStatus } from '@mcp-factory/shared';
+import type { BuildStatus, DeploymentStatus, Impact, IntegrationVerdict, QaLayer, QaStatus, StageName, StageState, VersionStatus } from '@mcp-builder/shared';
 
 export const cn = (...v: ClassValue[]) => twMerge(clsx(v));
 

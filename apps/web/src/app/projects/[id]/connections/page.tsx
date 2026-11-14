@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Pencil, Plug, PlugZap, Plus, Trash2 } from 'lucide-react';
-import type { AgentAccess, AuthType, ConnectionDto, UpsertConnectionInput } from '@mcp-factory/shared';
+import type { AgentAccess, AuthType, ConnectionDto, UpsertConnectionInput } from '@mcp-builder/shared';
 import { api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { cn, fmtDate } from '@/lib/utils';
@@ -41,7 +41,7 @@ export default function ConnectionsPage() {
   return (
     <>
       <PageHeader title="Connections"
-        description={<>Environments used for testing. Factory stores only secret <b className="text-foreground">references</b> (<code className="mono">env://VAR</code>); real credentials are never packaged into artifacts.</>}
+        description={<>Environments used for testing. MCP Builder stores only secret <b className="text-foreground">references</b> (<code className="mono">env://VAR</code>); real credentials are never packaged into artifacts.</>}
         actions={<button className="btn btn-outline" onClick={() => setEditing('new')}><Plus className="size-4" />Add environment</button>} />
       <Loaded q={q}>
         {(list) => list.length === 0 ? (

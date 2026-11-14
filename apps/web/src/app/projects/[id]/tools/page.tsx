@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Ban, Check, Copy, FileCode2, Search, TriangleAlert } from 'lucide-react';
-import type { Impact, Outputs, ToolDto, UpdateToolInput } from '@mcp-factory/shared';
+import type { Impact, Outputs, ToolDto, UpdateToolInput } from '@mcp-builder/shared';
 import { api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { cn, copyText, impactMeta } from '@/lib/utils';

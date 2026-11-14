@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Copy, KeyRound, Play, RefreshCw, Rocket, Square, Trash2, TriangleAlert } from 'lucide-react';
-import type { DeployResult, DeploymentDto } from '@mcp-factory/shared';
+import type { DeployResult, DeploymentDto } from '@mcp-builder/shared';
 import { api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { copyText, deploymentStatusMeta, fmtDate, impactMeta } from '@/lib/utils';

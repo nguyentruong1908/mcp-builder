@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Get, Injectable, Module, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { z } from 'zod';
-import type { SpecDiff, SpecResponse, ToolDto } from '@mcp-factory/shared';
+import type { SpecDiff, SpecResponse, ToolDto } from '@mcp-builder/shared';
 import { config } from '../config.js';
 import { AuditService } from '../core/core.services.js';
 import { toSpecDto, toToolDto } from '../core/mappers.js';

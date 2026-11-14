@@ -1,4 +1,4 @@
-import type { BuildSummary } from '@mcp-factory/shared';
+import type { BuildSummary } from '@mcp-builder/shared';
 import { buildStatusMeta, verdictMeta } from '@/lib/utils';
 import { Badge } from './ui';
 

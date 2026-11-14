@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { Archive, Check, Download, Pencil, Rocket, TriangleAlert, X } from 'lucide-react';
-import type { ProjectDetail, StepState } from '@mcp-factory/shared';
+import type { ProjectDetail, StepState } from '@mcp-builder/shared';
 import { api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { buildStatusMeta, cn, deploymentStatusMeta, fmtDate, initials, verdictMeta } from '@/lib/utils';

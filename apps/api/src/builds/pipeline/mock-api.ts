@@ -6,7 +6,7 @@ import type { ToolSnapshot } from './types.js';
 export interface RecordedRequest { method: string; path: string; query: Record<string, string | string[]>; headers: Record<string, string | string[] | undefined>; body: unknown }
 export interface MockResponse { status: number; body?: unknown; raw?: string; delayMs?: number; headers?: Record<string, string> }
 
-/** Factory-owned stand-in for the upstream API, derived from the tool definitions (not from Codex output). */
+/** Platform-owned stand-in for the upstream API, derived from the tool definitions (not from Codex output). */
 export class MockApi {
   readonly requests: RecordedRequest[] = [];
   private queue: MockResponse[] = [];

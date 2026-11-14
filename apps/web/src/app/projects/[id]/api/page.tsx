@@ -3,7 +3,7 @@
 import { useEffect, useState, type ChangeEvent } from 'react';
 import { useParams } from 'next/navigation';
 import { Check, CircleCheck, FileCode2, Info, Link as LinkIcon, Plus, Shield, Trash2, TriangleAlert, UploadCloud } from 'lucide-react';
-import type { ContextDto, UpdateContextInput } from '@mcp-factory/shared';
+import type { ContextDto, UpdateContextInput } from '@mcp-builder/shared';
 import { api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { cn, fmtDate, shortHash } from '@/lib/utils';

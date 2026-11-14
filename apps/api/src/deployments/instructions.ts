@@ -1,4 +1,4 @@
-import type { DeployInstruction, Impact } from '@mcp-factory/shared';
+import type { DeployInstruction, Impact } from '@mcp-builder/shared';
 
 interface ToolInfo { name: string; description: string; impact: Impact; requireConfirm: boolean }
 
