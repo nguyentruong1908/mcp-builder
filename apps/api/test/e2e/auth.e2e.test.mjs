@@ -99,6 +99,16 @@ test('the 11th failed attempt for the same username gets 429', async () => {
   assert.equal((await c.login('root', ADMIN.ADMIN_PASSWORD)).status, 201);
 });
 
+test('the limiter keys on the forwarded client IP behind a local proxy', async () => {
+  const attempt = (ip) => fetch(`${s.base}/api/auth/login`, {
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-mcpb-request': '1', 'x-forwarded-for': ip },
+    body: JSON.stringify({ username: 'ghost2', password: 'wrong-password' }),
+  }).then((r) => r.status);
+  for (let i = 0; i < 10; i++) assert.equal(await attempt('203.0.113.1'), 401);
+  assert.equal(await attempt('203.0.113.1'), 429);
+  assert.equal(await attempt('203.0.113.2'), 401);
+});
+
 test('mustChangePassword locks everything except me, password and logout', async () => {
   await makeUser('carol', 'carol-temp-pass', { mustChangePassword: true });
   const c = client(s.base);

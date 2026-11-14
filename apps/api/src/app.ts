@@ -24,6 +24,8 @@ class AppModule {}
 export async function createApp(): Promise<NestExpressApplication> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bodyParser: false });
   // Deployed MCP servers: mounted before the body parser so requests stream through untouched (and outside sign-in).
+  // req.ip (login limiter key) comes from X-Forwarded-For only when the peer is the local/private-network gateway.
+  app.set('trust proxy', 'loopback, linklocal, uniquelocal');
   app.use('/mcp', mcpProxy(app.get(PrismaService), app.get(DeploymentManager)));
   app.use('/api', authMiddleware(app.get(SessionService)));
   app.useBodyParser('json', { limit: '6mb' });
