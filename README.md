@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="brand/logo-wordmark.svg" alt="MCP Builder" height="56">
+  <img src="brand/mcp-builder-wordmark.svg" alt="MCP Builder" height="56">
 </p>
 
 <p align="center">
