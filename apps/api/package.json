@@ -12,7 +12,8 @@
     "prisma:migrate": "prisma migrate dev",
     "seed": "node --env-file=.env --experimental-strip-types prisma/seed.ts",
     "test": "node --test test/*.test.mjs",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "test:e2e": "node test/e2e/run.mjs"
   },
   "dependencies": {
     "@apidevtools/swagger-parser": "^13.1.0",

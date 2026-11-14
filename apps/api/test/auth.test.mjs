@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { hashPassword, verifyPassword, passwordProblem, generatePassword } from '../dist/auth/password.js';
+import { hashPassword, verifyPassword, passwordProblem, generatePassword, DUMMY_HASH } from '../dist/auth/password.js';
+import { LoginLimiter } from '../dist/auth/limiter.js';
 import { effectiveProjectPermissions, isPermissionOfScope, canGrant } from '../dist/auth/permissions.js';
 
 test('hash round-trips', async () => {
@@ -45,4 +46,17 @@ test('scope check', () => {
 test('canGrant', () => {
   assert.equal(canGrant(['a', 'b'], ['a']), true);
   assert.equal(canGrant(['a'], ['a', 'b']), false);
+});
+
+test('dummy hash never matches', async () => {
+  assert.equal(await verifyPassword('x', DUMMY_HASH), false);
+});
+
+test('login limiter blocks after 10 failures per key', () => {
+  const l = new LoginLimiter();
+  for (let i = 0; i < 10; i++) { assert.equal(l.blocked('ip|bob'), false); l.fail('ip|bob'); }
+  assert.equal(l.blocked('ip|bob'), true);
+  assert.equal(l.blocked('ip|alice'), false);
+  l.reset('ip|bob');
+  assert.equal(l.blocked('ip|bob'), false);
 });

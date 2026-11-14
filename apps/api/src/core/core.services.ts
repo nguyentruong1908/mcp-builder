@@ -1,6 +1,7 @@
 import { Global, Injectable, Module } from '@nestjs/common';
 import { EventEmitter } from 'node:events';
 import type { BuildEvent, SettingsDto } from '@mcp-builder/shared';
+import { actorName } from '../auth/context.js';
 import { config, DEFAULT_SETTINGS } from '../config.js';
 import { PrismaService } from './prisma.service.js';
 import type { Prisma } from '../generated/prisma/client.js';
@@ -9,7 +10,7 @@ import type { Prisma } from '../generated/prisma/client.js';
 export class AuditService {
   constructor(private readonly prisma: PrismaService) {}
 
-  log(action: string, target: string, meta?: Record<string, unknown>, actor = 'system') {
+  log(action: string, target: string, meta?: Record<string, unknown>, actor = actorName()) {
     return this.prisma.auditLog.create({ data: { actor, action, target, meta: (meta ?? undefined) as Prisma.InputJsonValue | undefined } });
   }
 }
