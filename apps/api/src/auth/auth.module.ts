@@ -67,11 +67,12 @@ class AuthController {
     const input = parse(z.object({ username: z.string().trim().toLowerCase().max(64), password: z.string().max(200) }), body);
     const key = `${req.ip}|${input.username}`;
     if (this.limiter.blocked(key)) throw new HttpException('Too many failed sign-in attempts. Try again in 15 minutes.', 429);
+    // Counted before verifying so parallel attempts cannot all pass the check; reset on success.
+    this.limiter.fail(key);
     const user = await this.prisma.user.findUnique({ where: { username: input.username }, include: { role: true } });
     // Unknown users are checked against a dummy hash so timing does not reveal which usernames exist.
     const ok = await verifyPassword(input.password, user?.passwordHash ?? DUMMY_HASH);
     if (!user || !ok || user.disabled) {
-      this.limiter.fail(key);
       await this.audit.log('auth.login_failed', input.username);
       throw new HttpException(INVALID_LOGIN, 401);
     }

@@ -99,11 +99,24 @@ test('the 11th failed attempt for the same username gets 429', async () => {
   assert.equal((await c.login('root', ADMIN.ADMIN_PASSWORD)).status, 201);
 });
 
+const attemptFrom = (ip, username, password = 'wrong-password') => fetch(`${s.base}/api/auth/login`, {
+  method: 'POST', headers: { 'content-type': 'application/json', 'x-mcpb-request': '1', 'x-forwarded-for': ip },
+  body: JSON.stringify({ username, password }),
+}).then((r) => r.status);
+
+test('parallel failed attempts cannot bypass the limiter', async () => {
+  const statuses = await Promise.all(Array.from({ length: 15 }, () => attemptFrom('203.0.113.9', 'ghost3')));
+  assert.ok(statuses.filter((x) => x === 429).length >= 5, statuses.join(','));
+});
+
+test('a successful sign-in resets the failure count', async () => {
+  for (let i = 0; i < 9; i++) assert.equal(await attemptFrom('203.0.113.10', 'root'), 401);
+  assert.equal(await attemptFrom('203.0.113.10', 'root', ADMIN.ADMIN_PASSWORD), 201);
+  for (let i = 0; i < 9; i++) assert.equal(await attemptFrom('203.0.113.10', 'root'), 401);
+});
+
 test('the limiter keys on the forwarded client IP behind a local proxy', async () => {
-  const attempt = (ip) => fetch(`${s.base}/api/auth/login`, {
-    method: 'POST', headers: { 'content-type': 'application/json', 'x-mcpb-request': '1', 'x-forwarded-for': ip },
-    body: JSON.stringify({ username: 'ghost2', password: 'wrong-password' }),
-  }).then((r) => r.status);
+  const attempt = (ip) => attemptFrom(ip, 'ghost2');
   for (let i = 0; i < 10; i++) assert.equal(await attempt('203.0.113.1'), 401);
   assert.equal(await attempt('203.0.113.1'), 429);
   assert.equal(await attempt('203.0.113.2'), 401);
