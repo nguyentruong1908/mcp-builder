@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import {
-  BookOpen, ChevronRight, ChevronsUpDown, FileCode2, Gauge, Hammer, LayoutDashboard, Loader2, Menu, Moon, Package, Play, Plug, Plus,
+  BookOpen, ChevronRight, ChevronsUpDown, FileCode2, Gauge, Hammer, LayoutDashboard, Loader2, Menu, Moon, Package, Play, Plug, Plus, Rocket,
   Settings2, ShieldCheck, Sun, Wrench,
 } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -23,6 +23,7 @@ const projectNav = [
   { seg: '/builds', label: 'Builds', icon: Hammer },
   { seg: '/qa', label: 'QA', icon: ShieldCheck },
   { seg: '/versions', label: 'Versions & Exports', icon: Package },
+  { seg: '/deploy', label: 'Deploy', icon: Rocket },
 ];
 
 function pageTitle(pathname: string) {

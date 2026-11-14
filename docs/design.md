@@ -95,6 +95,12 @@ Response types live in `packages/shared/src/index.ts`.
 | POST | `/builds/:id/qa-run` | Standalone QA run on that build's code (Codex generation skipped) |
 | GET | `/builds/:id/qa` | QA report: layers, coverage matrix, failures, results |
 | GET | `/artifacts/:id/download` | Download an artifact |
+| GET | `/projects/:id/deployment` | Current deployment of the project (or null) |
+| POST | `/builds/:id/deploy` | Deploy a Package verified build: `{ connectionId }` → `{ deployment, token }` (token shown once) |
+| POST | `/deployments/:id/start`, `/stop`, `/rotate-token` | Lifecycle; rotate returns a new token |
+| DELETE | `/deployments/:id` | Stop and remove the deployment |
+| GET | `/deployments/:id/logs` | Recent server output |
+| ANY | `/mcp/:slug` | Public MCP endpoint (Streamable HTTP), bearer token required, proxied to the deployed server |
 | GET | `/audit` | Audit log |
 | GET / PUT | `/settings` | Limits and budget |
 
@@ -124,6 +130,8 @@ Response types live in `packages/shared/src/index.ts`.
 | install | Install the tarball in a clean directory, run the CLI and list MCP tools |
 
 **Verdicts:** `packageVerified` requires every input, build, interface, contract, error and install result to pass, plus no failures in runtime or custom. `integrationVerified` is `yes` when every selected tool passes integration, `partial` with some passes and some blocked/not run, `no` with any failure, `not_run` otherwise.
+
+**Deployments (optional):** a Package verified build can be deployed. The API installs its tarball under `data/deployments/<slug>/<build>/`, runs `mcp.js --http <port>` on loopback with the chosen environment's credentials, and proxies `/mcp/<slug>` to it after checking a bearer token (only its sha256 is stored). One deployment per project; redeploy swaps the build and keeps the URL and token. Desired state is persisted, so deployments restart with the API.
 
 **Agent eval permissions:** on a live environment the agent sees read tools only, unless the connection grants `write` or `write_destructive`. The agent runs with the deployment sandbox and auto-approved tool calls. The Factory does not clean up data the agent creates; the agent decides and reports it.
 

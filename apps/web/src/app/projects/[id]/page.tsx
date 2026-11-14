@@ -3,11 +3,11 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { Archive, Check, Download, Pencil, TriangleAlert, X } from 'lucide-react';
+import { Archive, Check, Download, Pencil, Rocket, TriangleAlert, X } from 'lucide-react';
 import type { ProjectDetail, StepState } from '@mcp-factory/shared';
 import { api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
-import { buildStatusMeta, cn, fmtDate, initials, verdictMeta } from '@/lib/utils';
+import { buildStatusMeta, cn, deploymentStatusMeta, fmtDate, initials, verdictMeta } from '@/lib/utils';
 import { Badge, Card, CardHeader, Field, InlineError, Loaded, Modal, PageHeader, Spinner, Switch } from '@/components/ui';
 import { useToast } from '@/components/toast';
 import { ProjectGenerationCard } from '@/components/project-generation';
@@ -122,6 +122,8 @@ export default function ProjectOverviewPage() {
             </Card>
           </div>
 
+          <DeploymentLine projectId={p.id} />
+
           <ProjectGenerationCard projectId={p.id} />
 
           <EditProject open={editing} project={p} onClose={() => setEditing(false)} onSaved={(np) => { q.setData(np); setEditing(false); toast('Saved'); }} />
@@ -153,5 +155,24 @@ function EditProject({ open, project, onClose, onSaved }: { open: boolean; proje
         <InlineError error={err} />
       </div>
     </Modal>
+  );
+}
+
+/** Shown only when the project is deployed on the platform (deploying is optional). */
+function DeploymentLine({ projectId }: { projectId: string }) {
+  const q = useApi(() => api.deployment(projectId), [projectId]);
+  const d = q.data;
+  if (!d) return null;
+  return (
+    <Card className="mt-4">
+      <div className="flex flex-wrap items-center gap-3 px-5 py-4">
+        <Rocket className="size-4 text-muted-foreground" aria-hidden />
+        <span className="text-sm font-semibold">Deployment</span>
+        <Badge tone={deploymentStatusMeta[d.status].tone}>{deploymentStatusMeta[d.status].label}</Badge>
+        <code className="mono min-w-0 truncate text-xs text-muted-foreground">{d.url}</code>
+        <span className="text-xs text-muted-foreground">{d.buildLabel} · {d.versionNumber}</span>
+        <Link className="btn btn-outline btn-sm ml-auto" href={`/projects/${projectId}/deploy`}>Manage</Link>
+      </div>
+    </Card>
   );
 }
