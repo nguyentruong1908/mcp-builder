@@ -120,7 +120,7 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-Open `http://localhost:8080`, go to **Settings › Codex** and sign in. Device-code sign-in is recommended: the server shows a link and a one-time code you confirm in any browser. You can also save an API key or upload an `auth.json` from `codex login`. Credentials stay in the `builder-data` volume and are never returned by the API.
+Open `http://localhost:8080`. On first run you create the first admin on the `/setup` page (or set `ADMIN_USERNAME` and `ADMIN_PASSWORD` in `.env` and it is created on start, only while no user exists). Then go to **Settings › Codex** and sign in. Device-code sign-in is recommended: the server shows a link and a one-time code you confirm in any browser. You can also save an API key or upload an `auth.json` from `codex login`. Credentials stay in the `builder-data` volume and are never returned by the API.
 
 Secrets for QA environments go in an optional `secrets.env` (see `secrets.env.example`) and are referenced from connections as `env://NAME`.
 
@@ -129,6 +129,8 @@ Secrets for QA environments go in an optional `secrets.env` (see `secrets.env.ex
 | Variable | Default | Purpose |
 |---|---|---|
 | `MCP_BUILDER_BIND` | `127.0.0.1:8080` | Where the gateway listens |
+| `PUBLIC_URL` | `http://localhost:8080` | Public base URL; an `https` URL turns on the `Secure` cookie flag |
+| `ADMIN_USERNAME`, `ADMIN_PASSWORD` | empty | Optional first admin, created only when no user exists |
 | `POSTGRES_PASSWORD` | `mcp` | Database password |
 | `CODEX_MODEL` | `gpt-6-sol` | Default model when no profile sets one |
 | `CODEX_SANDBOX` | `danger-full-access` | Codex sandbox mode (see below) |
@@ -137,7 +139,30 @@ Secrets for QA environments go in an optional `secrets.env` (see `secrets.env.ex
 
 **Codex sandbox in Docker.** Codex sandboxes its own commands with bubblewrap, which needs user namespaces that Docker's default seccomp profile blocks. The compose file therefore runs Codex with `danger-full-access`, making the `api` container the isolation boundary. Alternatives: give the `api` service `security_opt: [seccomp=unconfined, apparmor=unconfined]` and set `CODEX_SANDBOX=workspace-write`, or maintain a custom seccomp profile that allows `unshare`.
 
-**Exposing it beyond localhost.** This version has no user accounts: anyone who reaches the port can manage the Codex sign-in and run builds. Put it behind a reverse proxy with TLS and authentication (or a VPN) before changing `MCP_BUILDER_BIND`.
+**Exposing it beyond localhost.** Sign-in is built in, but put the gateway behind a reverse proxy with TLS before changing `MCP_BUILDER_BIND`, and set `PUBLIC_URL` to the https address.
+
+### Accounts and roles
+
+- **Sign-in.** Everything under `/api` requires a session, except sign-in and first-run setup. Sessions are cookies (`HttpOnly`, `SameSite=Lax`, `Secure` when `PUBLIC_URL` is https) that last 7 days from sign-in. Failed sign-ins are rate limited.
+- **Users.** Admins create users under **Settings › Users**. A new or reset user gets a temporary password, shown once, and must change it on first sign-in. Users are disabled, never deleted. The last admin cannot be disabled or demoted.
+- **Roles.** Workspace roles (Admin, Member) and project roles (Owner, Developer, Domain expert, Reviewer, Agent developer) are sets of permissions. Edit them or add custom roles under **Settings › Roles**.
+- **Membership.** The creator of a project becomes its Owner. Owners add and remove people on the project's **Members** page. People who are not members cannot see the project. Users whose workspace role has the all-projects permission (Admin) see and manage every project.
+- **Existing projects.** Projects created before accounts have no members: only admins see them until members are added.
+- **Deployed MCP servers.** `/mcp/<slug>` endpoints are unchanged and keep using their own bearer tokens.
+- **Recovery.** If you lose the admin password, run this in the api container. It prints a temporary password, enables the user and forces a password change:
+
+```bash
+docker compose exec api node dist/cli/reset-password.js <username>
+```
+
+### Known limitations
+
+Project isolation in this version holds against honest mistakes, not against a hostile member. Two gaps are known and deliberately out of scope for now:
+
+- **Secret references read the whole API environment.** `env://NAME` resolves against the API's environment, so a member with `connections.manage` (Owners have it) can point a connection at their own host with `env://DATABASE_URL` or `env://ADMIN_PASSWORD` and receive the value through *Test connection*, builds, QA or deployments.
+- **Generated code and Codex run inside the API container.** Codex runs unsandboxed in Docker, and generated adapters run there during build, QA and deployments. Anyone who can shape Codex input (`spec.edit`, `context.edit`, `tools.edit`, `builds.run`) could, through prompt injection, read `/data` (all projects' workspaces and artifacts, the Codex sign-in) and the API's environment.
+
+Until a separate runner exists, grant these permissions only to trusted people. Planned follow-up: scope secret references to a dedicated prefix and move Codex, build, QA and deployments to an isolated runner service.
 
 ## Local development
 
@@ -180,9 +205,11 @@ pnpm --filter api build && pnpm --filter api test
 - [x] Versions, release gate, artifacts with checksums and provenance
 - [x] Codex sign-in from the UI, Docker Compose deployment
 - [x] Optional one-click deployment of generated MCP servers with token auth and copyable agent setup
+- [x] User accounts, sign-in and configurable roles (workspace and per-project permissions)
 
 **Next**
-- [ ] User accounts and roles (developer, domain expert, reviewer, admin, agent developer) and team-level profiles
+- [ ] Team-level generation profiles
+- [ ] Isolated runner for Codex, builds and QA, and scoped secret references (see Known limitations)
 - [ ] Regenerate-on-change: spec diff that re-runs only affected tools and tests
 - [ ] Profile comparison: same project, two profiles, compare QA scores, cost and time
 - [ ] Golden example adapters per team

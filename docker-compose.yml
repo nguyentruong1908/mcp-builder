@@ -29,6 +29,8 @@ services:
       DATABASE_URL: postgresql://mcp:${POSTGRES_PASSWORD:-mcp}@postgres:5432/mcp_builder?schema=public
       WEB_ORIGIN: ${PUBLIC_URL:-http://localhost:8080}
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8080}   # base of deployed MCP endpoints (/mcp/<slug>)
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       CODEX_MODEL: ${CODEX_MODEL:-gpt-6-sol}
       CODEX_SANDBOX: ${CODEX_SANDBOX:-danger-full-access}   # container is the isolation boundary (see README)
       CODEX_API_KEY: ${CODEX_API_KEY:-}

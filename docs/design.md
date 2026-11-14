@@ -10,7 +10,7 @@ This document describes how the MVP is built. The README covers goals, setup, an
 | Backend | NestJS 12 (ESM), Prisma 7 with the `pg` driver adapter, PostgreSQL 16 |
 | Code generation | `@openai/codex-sdk`, always real (no mock mode). Model and reasoning come from the generation profile |
 | Job queue | `Build` table in Postgres plus an in-process worker that claims jobs with `FOR UPDATE SKIP LOCKED` (no Redis) |
-| Auth | None yet. Every write is recorded with actor `system` |
+| Auth | Users with scrypt passwords, cookie sessions (7 days), configurable workspace and project roles. Every write records the real username as actor |
 | Output runtime | Node.js 20+ / npm. One base template: MCP server (stdio + Streamable HTTP) and CLI sharing `factory/tools.json` |
 | Monorepo | pnpm workspace: `apps/web`, `apps/api`, `packages/shared`, `templates/mcp-node` |
 | Deployment | Docker Compose: `postgres`, `api`, `web`, `gateway` (Caddy, one origin for UI and `/api`) |
@@ -53,6 +53,7 @@ data/ (outside the DB): build workspaces, artifacts, Codex home (auth.json)
 - `TestCase`: `tool_call`, `tool_steps` (ordered steps with `{{stepN.path}}` placeholders and cleanup steps), or `agent_task`.
 - `Version`: semver, status (draft / released / deprecated), frozen spec, context and tools.
 - `Build`: `kind` (export / qa), source build for QA runs, stage states, token usage and cost, repair and QA repair rounds, verdicts, frozen tool snapshot and generation profile, provenance.
+- `User` (username, display name, password hash, workspace role, `disabled`, `mustChangePassword`), `Session` (sha256 of the cookie token, expiry), `Role` (scope workspace or project, permissions, `system`), `ProjectMember` (project, user, project role).
 - `BuildLog`, `QaResult` (layer × tool × status + evidence), `Artifact`, `AuditLog`, `Setting` (limits, workspace generation profile).
 
 ## 4. API (prefix `/api`)
@@ -103,6 +104,20 @@ Response types live in `packages/shared/src/index.ts`.
 | GET | `/deployments/:id/logs` | Recent server output |
 | ANY | `/mcp/:slug` | Public MCP endpoint (Streamable HTTP), bearer token required, proxied to the deployed server |
 | GET | `/audit` | Audit log |
+| GET / POST | `/users` | List / create users (`users.manage`); create returns a temporary password once |
+| GET | `/users/lookup?q=` | Find enabled users for the add-member picker |
+| PATCH | `/users/:id` | Update name, role, disabled |
+| POST | `/users/:id/reset-password` | New temporary password, revokes sessions |
+| GET | `/permissions` | Permission catalogue |
+| GET / POST | `/roles` | List / create roles |
+| PATCH / DELETE | `/roles/:id` | Edit / delete a custom role |
+| GET / POST | `/projects/:id/members` | List / add members |
+| PATCH / DELETE | `/projects/:id/members/:userId` | Change role / remove |
+| GET | `/auth/setup-status` | `{ needsSetup }`, public |
+| POST | `/auth/setup` | Create the first admin, only while no user exists |
+| POST | `/auth/login`, `/auth/logout` | Start / end a session (non-GET calls need header `X-MCPB-Request: 1`) |
+| GET | `/auth/me` | Current user and permissions |
+| POST | `/auth/password` | Change own password |
 | GET / PUT | `/settings` | Limits and budget |
 
 ## 5. Build pipeline
