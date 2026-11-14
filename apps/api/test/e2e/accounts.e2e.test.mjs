@@ -105,6 +105,16 @@ test('a role manager cannot add permissions they do not hold', async () => {
   assert.equal((await uma.post('/api/roles', { name: 'Proj', scope: 'project', permissions: ['qa.run'] })).status, 403);
   assert.equal((await uma.patch(`/api/roles/${userManagerRole.id}`, { permissions: ['users.manage', 'projects.create', 'roles.manage', 'projects.all'] })).status, 403);
   assert.equal((await uma.patch(`/api/roles/${userManagerRole.id}`, { description: 'mine' })).status, 403);
+  // A role holding permissions uma lacks cannot be stripped (that would demote its holders) or deleted by her.
+  const ops = await root.post('/api/roles', { name: 'Ops', scope: 'workspace', permissions: ['users.manage', 'roles.manage', 'settings.manage', 'audit.read'] });
+  ok(ops);
+  const strip = await uma.patch(`/api/roles/${ops.body.id}`, { permissions: ['users.manage'] });
+  assert.equal(strip.status, 403);
+  assert.deepEqual((await root.get('/api/roles')).body.find((r) => r.id === ops.body.id).permissions, ['users.manage', 'roles.manage', 'settings.manage', 'audit.read']);
+  assert.equal((await uma.patch(`/api/roles/${ops.body.id}`, { description: 'ops' })).status, 403);
+  assert.equal((await uma.del(`/api/roles/${ops.body.id}`)).status, 403);
+  assert.equal((await uma.del('/api/roles/role_reviewer')).status, 403);
+  ok(await root.del(`/api/roles/${ops.body.id}`));
   ok(await root.patch(`/api/roles/${userManagerRole.id}`, { permissions: ['users.manage', 'projects.create'] }));
 });
 

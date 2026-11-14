@@ -168,7 +168,7 @@ class RolesController {
     if (scope === 'workspace' && !canGrant(me.permissions, permissions)) throw new ForbiddenException('A role may only include permissions you hold');
   }
 
-  /** System roles are fixed (409); the actor may not edit or delete a role they are assigned to (403). */
+  /** System roles are fixed (409); the actor may not edit or delete a role they are assigned to, nor one with permissions they lack (403). */
   private async editable(me: RequestUser, id: string): Promise<Role> {
     const role = await this.prisma.role.findUnique({ where: { id } });
     if (!role) throw new NotFoundException('Role not found');
@@ -176,6 +176,8 @@ class RolesController {
     if (me.roleId === id || (await this.prisma.projectMember.count({ where: { userId: me.id, roleId: id } }))) {
       throw new ForbiddenException('You cannot change a role you are assigned to');
     }
+    // Stripping permissions would demote every holder, so the current set must be one the actor could grant.
+    this.checkPermissions(me, role.scope as RoleScope, role.permissions);
     return role;
   }
 
