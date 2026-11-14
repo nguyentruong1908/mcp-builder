@@ -4,12 +4,13 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import {
-  BookOpen, ChevronRight, ChevronsUpDown, FileCode2, Gauge, Hammer, LayoutDashboard, Loader2, Menu, Moon, Package, Play, Plug, Plus, Rocket,
-  Server, Settings2, ShieldCheck, Sun, Wrench,
+  BookOpen, ChevronRight, ChevronsUpDown, FileCode2, Gauge, Hammer, LayoutDashboard, Loader2, LogOut, Menu, Moon, Package, Play, Plug, Plus, Rocket,
+  Server, Settings2, ShieldCheck, Sun, UserRound, Wrench,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { cn, initials, isActive } from '@/lib/utils';
+import { MeProvider, useMe } from '@/lib/auth';
 import { LogoMark } from './logo';
 import { ExportDialog } from './export-dialog';
 import { ToastProvider } from './toast';
@@ -28,6 +29,7 @@ const projectNav = [
 
 function pageTitle(pathname: string) {
   if (pathname === '/') return 'Dashboard';
+  if (pathname === '/account') return 'Account';
   if (pathname.startsWith('/settings')) return 'Settings & Audit';
   if (pathname === '/deployments') return 'Deployments';
   if (pathname === '/projects/new') return 'New project';
@@ -37,6 +39,12 @@ function pageTitle(pathname: string) {
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  if (/^\/(login|setup)(\/|$)/.test(pathname)) return <ToastProvider>{children}</ToastProvider>;
+  return <MeProvider><Shell>{children}</Shell></MeProvider>;
+}
+
+function Shell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const params = useParams<{ id?: string }>();
   const projectId = params.id;
@@ -91,14 +99,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </nav>
 
           <div className="border-t p-3">
-            <div className="flex items-center gap-2.5 rounded-md px-2 py-1.5">
-              <span className="avatar">LW</span>
-              <div className="min-w-0 flex-1 leading-tight">
-                <div className="truncate text-[13px] font-medium">Local user</div>
-                <div className="truncate text-[11px] text-muted-foreground">Sign-in not enabled</div>
-              </div>
-              <ThemeToggle />
-            </div>
+            <UserFooter />
           </div>
         </aside>
 
@@ -195,5 +196,25 @@ function ThemeToggle() {
     <button className="btn btn-ghost btn-icon size-8" onClick={toggle} aria-label="Toggle light/dark theme">
       {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
     </button>
+  );
+}
+
+function UserFooter() {
+  const { me } = useMe();
+  async function signOut() {
+    try { await api.logout(); } catch {}
+    window.location.assign('/login');
+  }
+  return (
+    <div className="flex items-center gap-2.5 rounded-md px-2 py-1.5">
+      <span className="avatar">{initials(me.displayName)}</span>
+      <div className="min-w-0 flex-1 leading-tight">
+        <div className="truncate text-[13px] font-medium">{me.displayName}</div>
+        <div className="truncate text-[11px] text-muted-foreground">{me.role.name}</div>
+      </div>
+      <Link href="/account" className="btn btn-ghost btn-icon size-8" aria-label="Account"><UserRound className="size-4" /></Link>
+      <button className="btn btn-ghost btn-icon size-8" onClick={signOut} aria-label="Sign out"><LogOut className="size-4" /></button>
+      <ThemeToggle />
+    </div>
   );
 }

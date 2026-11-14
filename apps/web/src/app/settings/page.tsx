@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Info } from 'lucide-react';
 import type { SettingsDto } from '@mcp-builder/shared';
 import { api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
@@ -18,10 +17,6 @@ export default function SettingsPage() {
   return (
     <>
       <PageHeader title="Settings & Audit" description="Codex account, budget, build limits and activity history." />
-      <div className="alert alert-info mb-6">
-        <Info className="mt-0.5 size-4 shrink-0 text-info" />
-        <div>Sign-in is not enabled in this version: all actions are recorded under a default user. Members and roles arrive with auth.</div>
-      </div>
       <Tabs className="mb-6" value={tab} onChange={setTab} tabs={[{ id: 'codex', label: 'Codex' }, { id: 'generation', label: 'Generation profile' }, { id: 'budget', label: 'Budget & limits' }, { id: 'audit', label: 'Audit log' }]} />
       {tab === 'codex' ? <CodexAuthPanel /> : tab === 'generation' ? <GenerationProfilePanel /> : tab === 'budget' ? <BudgetForm /> : <AuditLog />}
     </>

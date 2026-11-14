@@ -17,7 +17,12 @@ async function req<R>(path: string, init: Init = {}): Promise<R> {
     res = await fetch(API_URL + path, {
       ...rest,
       cache: 'no-store',
-      headers: { ...(json !== undefined ? { 'content-type': 'application/json' } : {}), ...headers },
+      credentials: 'include',
+      headers: {
+        ...(json !== undefined ? { 'content-type': 'application/json' } : {}),
+        ...((rest.method ?? 'GET') !== 'GET' ? { 'X-MCPB-Request': '1' } : {}),
+        ...headers,
+      },
       body: json !== undefined ? JSON.stringify(json) : undefined,
     });
   } catch {
@@ -26,6 +31,9 @@ async function req<R>(path: string, init: Init = {}): Promise<R> {
   const text = await res.text();
   let body: unknown = undefined;
   if (text) { try { body = JSON.parse(text); } catch { body = text; } }
+  if (res.status === 401 && typeof window !== 'undefined' && !/^\/(login|setup)(\/|$)/.test(window.location.pathname)) {
+    window.location.assign('/login?next=' + encodeURIComponent(window.location.pathname + window.location.search));
+  }
   if (!res.ok) {
     const m = (body as Partial<T.ApiError> | undefined)?.message;
     throw new ApiError(Array.isArray(m) ? m.join('; ') : m || (typeof body === 'string' && body) || `${res.status} ${res.statusText}`, res.status);
@@ -35,7 +43,33 @@ async function req<R>(path: string, init: Init = {}): Promise<R> {
 
 const e = encodeURIComponent;
 
+type RoleInput = { name: string; scope: T.RoleScope; description?: string; permissions: string[] };
+
 export const api = {
+  setupStatus: () => req<{ needsSetup: boolean }>('/auth/setup-status'),
+  setup: (input: { username: string; displayName: string; password: string }) => req<T.MeDto>('/auth/setup', { method: 'POST', json: input }),
+  login: (input: { username: string; password: string }) => req<T.MeDto>('/auth/login', { method: 'POST', json: input }),
+  logout: () => req<unknown>('/auth/logout', { method: 'POST' }),
+  me: () => req<T.MeDto>('/auth/me'),
+  changePassword: (input: { current: string; next: string }) => req<T.MeDto>('/auth/password', { method: 'POST', json: input }),
+
+  users: () => req<T.UserDto[]>('/users'),
+  userLookup: (q: string) => req<T.UserLookupDto[]>(`/users/lookup?q=${e(q)}`),
+  createUser: (input: { username: string; displayName: string; roleId: string; password?: string }) => req<T.UserCreateResult>('/users', { method: 'POST', json: input }),
+  updateUser: (id: string, input: { displayName?: string; roleId?: string; disabled?: boolean }) => req<T.UserDto>(`/users/${e(id)}`, { method: 'PATCH', json: input }),
+  resetPassword: (id: string, input: { password?: string } = {}) => req<{ temporaryPassword: string | null }>(`/users/${e(id)}/reset-password`, { method: 'POST', json: input }),
+
+  permissions: () => req<T.PermissionInfo[]>('/permissions'),
+  roles: () => req<T.RoleDto[]>('/roles'),
+  createRole: (input: RoleInput) => req<T.RoleDto>('/roles', { method: 'POST', json: input }),
+  updateRole: (id: string, input: Partial<Omit<RoleInput, 'scope'>>) => req<T.RoleDto>(`/roles/${e(id)}`, { method: 'PATCH', json: input }),
+  deleteRole: (id: string) => req<unknown>(`/roles/${e(id)}`, { method: 'DELETE' }),
+
+  members: (id: string) => req<T.ProjectMemberDto[]>(`/projects/${e(id)}/members`),
+  addMember: (id: string, input: { userId: string; roleId: string }) => req<T.ProjectMemberDto>(`/projects/${e(id)}/members`, { method: 'POST', json: input }),
+  updateMember: (id: string, userId: string, input: { roleId: string }) => req<T.ProjectMemberDto>(`/projects/${e(id)}/members/${e(userId)}`, { method: 'PATCH', json: input }),
+  removeMember: (id: string, userId: string) => req<unknown>(`/projects/${e(id)}/members/${e(userId)}`, { method: 'DELETE' }),
+
   dashboard: () => req<T.DashboardDto>('/dashboard'),
 
   projects: () => req<T.ProjectSummary[]>('/projects'),

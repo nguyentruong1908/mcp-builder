@@ -52,7 +52,7 @@ export default function BuildDetailPage() {
     setLogs([]); setPolling(false);
     let closed = false;
     api.buildLogs(buildId, 0).then(addLogs).catch(() => {});
-    const es = new EventSource(buildEventsUrl(buildId));
+    const es = new EventSource(buildEventsUrl(buildId), { withCredentials: true });
     es.onmessage = (e) => {
       try {
         const ev = JSON.parse(e.data) as BuildEvent;
