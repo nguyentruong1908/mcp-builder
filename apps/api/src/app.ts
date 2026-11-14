@@ -3,6 +3,7 @@ import 'reflect-metadata';
 import { Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import { AccountsModule } from './accounts/accounts.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { authMiddleware, SessionService } from './auth/sessions.js';
 import { BuildsModule } from './builds/builds.module.js';
@@ -17,7 +18,7 @@ import { SpecModule } from './spec/spec.module.js';
 import { DeploymentManager, DeploymentsModule, mcpProxy } from './deployments/deployments.module.js';
 import { PrismaService } from './core/prisma.service.js';
 
-@Module({ imports: [CoreModule, AuthModule, ProjectsModule, SpecModule, ConnectionsModule, BuildsModule, CodexAuthModule, TestCasesModule, GenerationModule, DeploymentsModule] })
+@Module({ imports: [CoreModule, AuthModule, AccountsModule, ProjectsModule, SpecModule, ConnectionsModule, BuildsModule, CodexAuthModule, TestCasesModule, GenerationModule, DeploymentsModule] })
 class AppModule {}
 
 /** The configured API, not yet listening (main.ts listens; e2e tests listen on a random port). */
