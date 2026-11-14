@@ -95,6 +95,7 @@ Response types live in `packages/shared/src/index.ts`.
 | POST | `/builds/:id/qa-run` | Standalone QA run on that build's code (Codex generation skipped) |
 | GET | `/builds/:id/qa` | QA report: layers, coverage matrix, failures, results |
 | GET | `/artifacts/:id/download` | Download an artifact |
+| GET | `/deployments` | Every deployment across projects (workspace Deployments page) |
 | GET | `/projects/:id/deployment` | Current deployment of the project (or null) |
 | POST | `/builds/:id/deploy` | Deploy a Package verified build: `{ connectionId }` → `{ deployment, token }` (token shown once) |
 | POST | `/deployments/:id/start`, `/stop`, `/rotate-token` | Lifecycle; rotate returns a new token |

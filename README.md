@@ -75,6 +75,7 @@ Any *Package verified* build can be deployed from the **Deploy** page, a build, 
 - Agents reach it at `<PUBLIC_URL>/mcp/<project-slug>` with a bearer token. The token is shown once; MCP Builder stores only its hash and can rotate it.
 - The server calls your API with the credentials of the environment you pick (for example `prod`).
 - The page gives copyable setup for Claude Code, Codex CLI, generic MCP client JSON, a `curl` check, and an instruction block to paste into an agent's prompt.
+- The workspace **Deployments** menu lists every project's deployment in one table: status, endpoint, build and environment, with start/stop, redeploy, token rotation and removal, plus one-click deploy for projects that are not deployed yet.
 - Redeploying a newer build keeps the URL and token, so connected agents keep working. Deployments restart automatically with the API; stop, start, rotate, logs and removal are on the same page.
 
 Deployed servers run inside the `api` container, next to MCP Builder. Put the gateway behind TLS before exposing endpoints beyond localhost.

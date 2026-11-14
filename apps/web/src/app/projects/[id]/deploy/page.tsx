@@ -3,13 +3,13 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { Copy, KeyRound, Play, RefreshCw, Rocket, Square, Trash2, TriangleAlert } from 'lucide-react';
+import { KeyRound, Play, RefreshCw, Rocket, Square, Trash2, TriangleAlert } from 'lucide-react';
 import type { DeployResult, DeploymentDto } from '@mcp-builder/shared';
 import { api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
-import { copyText, deploymentStatusMeta, fmtDate, impactMeta } from '@/lib/utils';
+import { deploymentStatusMeta, fmtDate, impactMeta } from '@/lib/utils';
 import { Badge, Card, CardHeader, EmptyState, InlineError, Loaded, PageHeader, Spinner, Tabs } from '@/components/ui';
-import { DeployDialog, takePendingDeployResult } from '@/components/deploy-dialog';
+import { CopyButton, DeployDialog, TokenBox, takePendingDeployResult } from '@/components/deploy-dialog';
 import { useToast } from '@/components/toast';
 
 export default function DeployPage() {
@@ -82,27 +82,6 @@ export default function DeployPage() {
       </Loaded>
       <DeployDialog open={dialog} onClose={() => setDialog(false)} projectId={id} onDeployed={applyResult} />
     </>
-  );
-}
-
-function CopyButton({ text, label = 'Copy', className = 'btn btn-outline btn-sm' }: { text: string; label?: string; className?: string }) {
-  const toast = useToast();
-  return <button className={className} onClick={async () => { const ok = await copyText(text); toast(ok ? 'Copied' : 'Copy failed', ok ? 'ok' : 'error'); }}><Copy className="size-3.5" />{label}</button>;
-}
-
-function TokenBox({ token }: { token: string }) {
-  return (
-    <div className="alert alert-warning">
-      <KeyRound className="mt-0.5 size-4 shrink-0 text-warning" />
-      <div className="min-w-0 flex-1">
-        <div className="font-medium">Copy this token now — it will not be shown again</div>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <code className="mono break-all rounded-md border bg-background px-2 py-1">{token}</code>
-          <CopyButton text={token} />
-        </div>
-        <p className="mt-1 text-xs text-muted-foreground">The snippets below include it until you leave this page. Lost it? Rotate the token.</p>
-      </div>
-    </div>
   );
 }
 

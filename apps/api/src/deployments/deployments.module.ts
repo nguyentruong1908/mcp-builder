@@ -176,6 +176,7 @@ export class DeploymentsController {
     return {
       id: d.id,
       projectId: d.projectId,
+      projectName: d.project.name,
       slug: d.slug,
       url,
       status: d.status as DeploymentStatus,
@@ -193,6 +194,13 @@ export class DeploymentsController {
       tools,
       instructions: buildInstructions({ url, slug: d.slug, projectName: d.project.name, description: d.project.description, tools }),
     };
+  }
+
+  /** Every deployment across projects, for the workspace Deployments page. */
+  @Get('deployments')
+  async list(): Promise<DeploymentDto[]> {
+    const all = await this.prisma.deployment.findMany({ select: { id: true }, orderBy: { project: { name: 'asc' } } });
+    return Promise.all(all.map((d) => this.dto(d.id)));
   }
 
   @Get('projects/:id/deployment')

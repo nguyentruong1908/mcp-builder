@@ -3,11 +3,11 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Rocket, TriangleAlert } from 'lucide-react';
+import { Copy, KeyRound, Rocket, TriangleAlert } from 'lucide-react';
 import type { DeployResult } from '@mcp-builder/shared';
 import { api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
-import { fmtDate } from '@/lib/utils';
+import { copyText, fmtDate } from '@/lib/utils';
 import { Field, InlineError, LoadingBlock, Modal, Spinner } from './ui';
 import { useToast } from './toast';
 
@@ -104,5 +104,26 @@ export function DeployDialog({ open, onClose, projectId, buildId, onDeployed }: 
         </div>
       )}
     </Modal>
+  );
+}
+
+export function CopyButton({ text, label = 'Copy', className = 'btn btn-outline btn-sm' }: { text: string; label?: string; className?: string }) {
+  const toast = useToast();
+  return <button className={className} title={label || 'Copy'} aria-label={label || 'Copy'} onClick={async () => { const ok = await copyText(text); toast(ok ? 'Copied' : 'Copy failed', ok ? 'ok' : 'error'); }}><Copy className="size-3.5" />{label}</button>;
+}
+
+export function TokenBox({ token, title }: { token: string; title?: string }) {
+  return (
+    <div className="alert alert-warning">
+      <KeyRound className="mt-0.5 size-4 shrink-0 text-warning" />
+      <div className="min-w-0 flex-1">
+        <div className="font-medium">{title ?? 'Copy this token now — it will not be shown again'}</div>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <code className="mono break-all rounded-md border bg-background px-2 py-1">{token}</code>
+          <CopyButton text={token} />
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">The snippets below include it until you leave this page. Lost it? Rotate the token.</p>
+      </div>
+    </div>
   );
 }

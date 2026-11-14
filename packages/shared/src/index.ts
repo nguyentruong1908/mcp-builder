@@ -270,6 +270,7 @@ export interface DeployInstruction { id: string; title: string; language: 'bash'
 export interface DeploymentDto {
   id: string;
   projectId: string;
+  projectName: string;
   slug: string;                 // public path: /mcp/<slug>
   url: string;                  // full MCP endpoint (Streamable HTTP)
   status: DeploymentStatus;

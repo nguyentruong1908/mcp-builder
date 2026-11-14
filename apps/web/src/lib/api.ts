@@ -73,6 +73,7 @@ export const api = {
   qa: (bid: string) => req<T.QaReport>(`/builds/${e(bid)}/qa`),
   qaRun: (bid: string, input: T.CreateQaRunInput) => req<T.BuildSummary>(`/builds/${e(bid)}/qa-run`, { method: 'POST', json: input }),
 
+  deployments: () => req<T.DeploymentDto[]>('/deployments'),
   deployment: (id: string) => req<T.DeploymentDto | null>(`/projects/${e(id)}/deployment`),
   deploy: (bid: string, input: T.DeployInput) => req<T.DeployResult>(`/builds/${e(bid)}/deploy`, { method: 'POST', json: input }),
   startDeployment: (did: string) => req<T.DeploymentDto>(`/deployments/${e(did)}/start`, { method: 'POST' }),

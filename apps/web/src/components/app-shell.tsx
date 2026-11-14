@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import {
   BookOpen, ChevronRight, ChevronsUpDown, FileCode2, Gauge, Hammer, LayoutDashboard, Loader2, Menu, Moon, Package, Play, Plug, Plus, Rocket,
-  Settings2, ShieldCheck, Sun, Wrench,
+  Server, Settings2, ShieldCheck, Sun, Wrench,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
@@ -29,6 +29,7 @@ const projectNav = [
 function pageTitle(pathname: string) {
   if (pathname === '/') return 'Dashboard';
   if (pathname.startsWith('/settings')) return 'Settings & Audit';
+  if (pathname === '/deployments') return 'Deployments';
   if (pathname === '/projects/new') return 'New project';
   const m = pathname.match(/^\/projects\/[^/]+(\/[^/]+)?(\/[^/]+)?/);
   if (m?.[1] === '/builds' && m[2]) return 'Build';
@@ -71,6 +72,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <nav className="flex-1 overflow-y-auto px-3 pb-4" aria-label="Main navigation">
             <div className="nav-group">Workspace</div>
             <Link href="/" className={cn('nav-item', pathname === '/' && 'active')}><LayoutDashboard className="size-4" />Dashboard</Link>
+            <Link href="/deployments" className={cn('nav-item', pathname === '/deployments' && 'active')}><Server className="size-4" />Deployments</Link>
             <Link href="/settings" className={cn('nav-item', pathname.startsWith('/settings') && 'active')}><Settings2 className="size-4" />Settings &amp; Audit</Link>
 
             <div className="nav-group">Tool Project</div>
