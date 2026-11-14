@@ -57,6 +57,7 @@ model Project {
 
   specs       SpecSnapshot[]
   deployment  Deployment?
+  members     ProjectMember[]
   testCases   TestCase[]
   context     ProjectContext?
   tools       ToolDefinition[]
@@ -304,4 +305,59 @@ model Deployment {
   stoppedAt    DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  name        String
+  scope       String // workspace | project
+  description String   @default("")
+  permissions String[] @default([])
+  system      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  users   User[]
+  members ProjectMember[]
+
+  @@unique([scope, name])
+}
+
+model User {
+  id                 String    @id @default(cuid())
+  username           String    @unique
+  displayName        String
+  passwordHash       String
+  roleId             String
+  role               Role      @relation(fields: [roleId], references: [id])
+  disabled           Boolean   @default(false)
+  mustChangePassword Boolean   @default(false)
+  lastLoginAt        DateTime?
+  createdAt          DateTime  @default(now())
+
+  memberships ProjectMember[]
+  sessions    Session[]
+}
+
+model ProjectMember {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  roleId    String
+  role      Role     @relation(fields: [roleId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, userId])
+}
+
+model Session {
+  id        String   @id // sha256 hex of the session token
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  userAgent String   @default("")
+
+  @@index([userId])
 }

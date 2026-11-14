@@ -314,3 +314,27 @@ export interface UploadAuthInput { content: string }
 export interface ApiKeyLoginInput { apiKey: string }
 
 export interface ApiError { statusCode: number; message: string | string[] }
+
+// ---- Accounts and RBAC ----
+export type WorkspacePermission =
+  | 'users.manage' | 'roles.manage' | 'codex.manage' | 'settings.manage'
+  | 'audit.read' | 'projects.create' | 'projects.all';
+export type ProjectPermission =
+  | 'project.edit' | 'spec.edit' | 'context.edit' | 'tools.edit' | 'connections.manage' | 'testcases.manage'
+  | 'builds.run' | 'qa.run' | 'versions.release' | 'deploy.manage' | 'members.manage' | 'artifacts.download';
+export type RoleScope = 'workspace' | 'project';
+export interface PermissionInfo { key: WorkspacePermission | ProjectPermission; scope: RoleScope; label: string; description: string }
+
+export interface RoleRef { id: string; name: string }
+export interface MeDto { id: string; username: string; displayName: string; role: RoleRef; permissions: WorkspacePermission[]; mustChangePassword: boolean }
+export interface UserDto {
+  id: string; username: string; displayName: string; role: RoleRef;
+  disabled: boolean; mustChangePassword: boolean; lastLoginAt: string | null; createdAt: string;
+}
+export interface UserCreateResult { user: UserDto; temporaryPassword: string | null }
+export interface UserLookupDto { id: string; username: string; displayName: string }
+export interface RoleDto {
+  id: string; name: string; scope: RoleScope; description: string;
+  permissions: string[]; system: boolean; usage: number;
+}
+export interface ProjectMemberDto { userId: string; username: string; displayName: string; role: RoleRef; createdAt: string }
