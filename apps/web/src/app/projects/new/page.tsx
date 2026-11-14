@@ -11,7 +11,6 @@ export default function NewProjectPage() {
   const toast = useToast();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [owner, setOwner] = useState('');
   const [outputs, setOutputs] = useState({ mcp: true, cli: true });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -21,7 +20,7 @@ export default function NewProjectPage() {
     if (!name.trim()) return setErr('Enter a project name.');
     setBusy(true); setErr(null);
     try {
-      const p = await api.createProject({ name: name.trim(), description: description.trim(), owner: owner.trim(), outputs });
+      const p = await api.createProject({ name: name.trim(), description: description.trim(), outputs });
       toast('Project created');
       router.push(`/projects/${p.id}/api`);
     } catch (e) { setErr((e as Error).message); setBusy(false); }
@@ -37,9 +36,6 @@ export default function NewProjectPage() {
           </Field>
           <Field label="Description">
             {(id) => <textarea id={id} className="textarea" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Let agents look up and create sales orders…" />}
-          </Field>
-          <Field label="Owner">
-            {(id) => <input id={id} className="input" value={owner} onChange={(e) => setOwner(e.target.value)} />}
           </Field>
           <div>
             <div className="label">Outputs</div>

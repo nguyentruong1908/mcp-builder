@@ -136,7 +136,7 @@ export default function ProjectOverviewPage() {
 }
 
 function EditProject({ open, project, onClose, onSaved }: { open: boolean; project: ProjectDetail; onClose: () => void; onSaved: (p: ProjectDetail) => void }) {
-  const [form, setForm] = useState({ name: project.name, description: project.description, owner: project.owner, outputs: project.outputs });
+  const [form, setForm] = useState({ name: project.name, description: project.description, outputs: project.outputs });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   async function save() {
@@ -149,7 +149,6 @@ function EditProject({ open, project, onClose, onSaved }: { open: boolean; proje
       <div className="space-y-4">
         <Field label="Name">{(id) => <input id={id} className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />}</Field>
         <Field label="Description">{(id) => <textarea id={id} className="textarea" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />}</Field>
-        <Field label="Owner">{(id) => <input id={id} className="input" value={form.owner} onChange={(e) => setForm({ ...form, owner: e.target.value })} />}</Field>
         <div className="flex gap-6">
           <label className="flex items-center gap-2 text-sm"><Switch label="MCP" checked={form.outputs.mcp} onChange={(v) => setForm({ ...form, outputs: { ...form.outputs, mcp: v } })} />MCP</label>
           <label className="flex items-center gap-2 text-sm"><Switch label="CLI" checked={form.outputs.cli} onChange={(v) => setForm({ ...form, outputs: { ...form.outputs, cli: v } })} />CLI</label>

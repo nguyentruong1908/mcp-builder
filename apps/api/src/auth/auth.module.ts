@@ -103,6 +103,7 @@ class AuthController {
     const me = currentUser()!;
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: me.id } });
     if (!(await verifyPassword(input.current, user.passwordHash))) throw new BadRequestException('Current password is incorrect');
+    if (input.next === input.current) throw new BadRequestException('Choose a password different from the current one.');
     const problem = passwordProblem(input.next, user.username);
     if (problem) throw new BadRequestException(problem);
     const updated = await this.prisma.user.update({

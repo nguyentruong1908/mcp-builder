@@ -5,11 +5,7 @@ import type { ProjectPermission, WorkspacePermission } from '@mcp-builder/shared
 
 /** Labels mirror the API's permission catalog (GET /permissions); the Roles tab renders from the API. */
 const LABELS: Record<ProjectPermission | WorkspacePermission, string> = {
-  'users.manage': 'Manage users', 'roles.manage': 'Manage roles', 'codex.manage': 'Manage Codex sign-in', 'settings.manage': 'Manage settings',
-  'audit.read': 'Read audit log', 'projects.create': 'Create projects', 'projects.all': 'Access all projects',
-  'project.edit': 'Edit project', 'spec.edit': 'Edit spec', 'context.edit': 'Edit context', 'tools.edit': 'Edit tools',
-  'connections.manage': 'Manage connections', 'testcases.manage': 'Manage test cases', 'builds.run': 'Run builds', 'qa.run': 'Run QA',
-  'versions.release': 'Release versions', 'deploy.manage': 'Manage deployments', 'members.manage': 'Manage members', 'artifacts.download': 'Download artifacts',
+  'users.manage': 'Manage users', 'roles.manage': 'Manage roles', 'codex.manage': 'Manage Codex sign-in', 'settings.manage': 'Manage settings', 'audit.read': 'Read audit log', 'projects.create': 'Create projects', 'projects.all': 'All projects', 'project.edit': 'Edit project', 'spec.edit': 'Import specs', 'context.edit': 'Edit context', 'tools.edit': 'Edit tools', 'connections.manage': 'Manage connections', 'testcases.manage': 'Manage test cases', 'builds.run': 'Run exports', 'qa.run': 'Run QA', 'versions.release': 'Release versions', 'deploy.manage': 'Manage deployment', 'members.manage': 'Manage members', 'artifacts.download': 'Download artifacts',
 };
 
 export const permLabel = (p: ProjectPermission | WorkspacePermission) => LABELS[p];

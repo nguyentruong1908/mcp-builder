@@ -17,7 +17,6 @@ const outputsSchema = z.object({ mcp: z.boolean(), cli: z.boolean() }).refine((o
 const createSchema = z.object({
   name: z.string().trim().min(2).max(120),
   description: z.string().max(2000).optional(),
-  owner: z.string().max(120).optional(),
   outputs: outputsSchema.optional(),
 }).strict();
 const updateSchema = createSchema.partial();

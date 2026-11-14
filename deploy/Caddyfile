@@ -1,3 +1,9 @@
+# Behind an outer TLS proxy, trust its X-Forwarded-For so the API sees real client IPs:
+# {
+# 	servers {
+# 		trusted_proxies static 10.0.0.0/8
+# 	}
+# }
 # Single public entry point: UI and API on one origin (no CORS, SSE-friendly).
 :80 {
 	handle /api/* {

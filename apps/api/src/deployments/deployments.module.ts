@@ -156,6 +156,7 @@ export function mcpProxy(prisma: PrismaService, manager: DeploymentManager) {
     if (!port || d.status !== 'running') return send(503, `MCP server is ${d.status}`);
     const headers = { ...req.headers, host: `127.0.0.1:${port}` };
     delete headers.authorization;
+    delete headers.cookie; // never hand the session cookie to generated server code
     const up = request(
       { host: '127.0.0.1', port, method: req.method, path: `/mcp${rest.length ? `/${rest.join('/')}` : ''}${query ? `?${query}` : ''}`, headers },
       (r) => { res.writeHead(r.statusCode ?? 502, r.headers); r.pipe(res); },

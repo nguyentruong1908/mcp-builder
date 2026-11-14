@@ -139,7 +139,7 @@ Secrets for QA environments go in an optional `secrets.env` (see `secrets.env.ex
 
 **Codex sandbox in Docker.** Codex sandboxes its own commands with bubblewrap, which needs user namespaces that Docker's default seccomp profile blocks. The compose file therefore runs Codex with `danger-full-access`, making the `api` container the isolation boundary. Alternatives: give the `api` service `security_opt: [seccomp=unconfined, apparmor=unconfined]` and set `CODEX_SANDBOX=workspace-write`, or maintain a custom seccomp profile that allows `unshare`.
 
-**Exposing it beyond localhost.** Sign-in is built in, but put the gateway behind a reverse proxy with TLS before changing `MCP_BUILDER_BIND`, and set `PUBLIC_URL` to the https address.
+**Exposing it beyond localhost.** Sign-in is built in, but put the gateway behind a reverse proxy with TLS before changing `MCP_BUILDER_BIND`, and set `PUBLIC_URL` to the https address. If TLS is terminated by an outer proxy in front of this Caddy gateway, either terminate TLS in this gateway instead, or set `servers { trusted_proxies static <outer proxy CIDR> }` in the global options of `deploy/Caddyfile` (commented example there). Otherwise the sign-in rate limit sees only the proxy's address, and anyone can lock a user out of signing in for 15 minutes.
 
 ### Accounts and roles
 
@@ -160,7 +160,7 @@ docker compose exec api node dist/cli/reset-password.js <username>
 Project isolation in this version holds against honest mistakes, not against a hostile member. Two gaps are known and deliberately out of scope for now:
 
 - **Secret references read the whole API environment.** `env://NAME` resolves against the API's environment, so a member with `connections.manage` (Owners have it) can point a connection at their own host with `env://DATABASE_URL` or `env://ADMIN_PASSWORD` and receive the value through *Test connection*, builds, QA or deployments.
-- **Generated code and Codex run inside the API container.** Codex runs unsandboxed in Docker, and generated adapters run there during build, QA and deployments. Anyone who can shape Codex input (`spec.edit`, `context.edit`, `tools.edit`, `builds.run`) could, through prompt injection, read `/data` (all projects' workspaces and artifacts, the Codex sign-in) and the API's environment.
+- **Generated code and Codex run inside the API container.** Codex runs unsandboxed in Docker, and generated adapters run there during build, QA and deployments. Anyone who can shape Codex input (`spec.edit`, `context.edit`, `tools.edit`, `builds.run`, `qa.run`, `deploy.manage`) could, through prompt injection, read `/data` (all projects' workspaces and artifacts, the Codex sign-in) and the API's environment.
 
 Until a separate runner exists, grant these permissions only to trusted people. Planned follow-up: scope secret references to a dedicated prefix and move Codex, build, QA and deployments to an isolated runner service.
 

@@ -132,6 +132,9 @@ test('mustChangePassword locks everything except me, password and logout', async
   assert.equal((await c.get('/api/auth/me')).status, 200);
   assert.equal((await c.post('/api/auth/password', { current: 'wrong-current', next: 'carol-new-pass-1' })).status, 400);
   assert.equal((await c.post('/api/auth/password', { current: 'carol-temp-pass', next: 'short' })).status, 400);
+  const same = await c.post('/api/auth/password', { current: 'carol-temp-pass', next: 'carol-temp-pass' });
+  assert.equal(same.status, 400);
+  assert.equal((await c.get('/api/projects')).status, 403);
   const changed = await c.post('/api/auth/password', { current: 'carol-temp-pass', next: 'carol-new-pass-1' });
   assert.equal(changed.status, 201);
   assert.equal(changed.body.mustChangePassword, false);

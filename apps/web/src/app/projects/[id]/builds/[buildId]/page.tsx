@@ -109,6 +109,7 @@ export default function BuildDetailPage() {
   return (
     <Loaded q={b}>
       {(d) => {
+        const cancelPerm = d.kind === 'qa' ? qaPerm : runPerm;
         const duration = d.durationMs ?? (d.startedAt ? now - new Date(d.startedAt).getTime() : null);
         return (
           <>
@@ -116,7 +117,7 @@ export default function BuildDetailPage() {
               title={<span className="flex flex-wrap items-center gap-3"><span className="mono">{d.label}</span><span className="text-muted-foreground">·</span><span className="mono">{d.versionNumber}</span></span>}
               description={<span className="flex flex-wrap items-center gap-2">Created {fmtDate(d.createdAt)} by {d.triggeredBy}<BuildBadges b={d} />{d.kind === 'qa' && d.sourceBuildId && <span>on the code of <Link href={`/projects/${id}/builds/${d.sourceBuildId}`} className="mono text-foreground hover:underline">{d.sourceBuildLabel}</Link></span>}</span>}
               actions={<>
-                <button className="btn btn-danger btn-sm" disabled={!active || cancelling || !runPerm.ok} title={runPerm.title} onClick={cancel}>{cancelling ? <Spinner className="size-3.5" /> : <Square className="size-3.5" />}Cancel job</button>
+                <button className="btn btn-danger btn-sm" disabled={!active || cancelling || !cancelPerm.ok} title={cancelPerm.title} onClick={cancel}>{cancelling ? <Spinner className="size-3.5" /> : <Square className="size-3.5" />}Cancel job</button>
                 <button className="btn btn-outline btn-sm" disabled={active || d.stages.build !== 'ok' || !qaPerm.ok} title={qaPerm.title ?? (d.stages.build === 'ok' ? undefined : 'This build has no compiled code')} onClick={() => setQaOpen(true)}><FlaskConical className="size-3.5" />Re-run QA</button>
                 <Link className="btn btn-outline btn-sm" href={`/projects/${id}/qa?build=${d.id}`}>QA report</Link>
                 {d.packageVerified && d.stages.package === 'ok' && <button className="btn btn-outline btn-sm" disabled={!depPerm.ok} title={depPerm.title} onClick={() => setDeployOpen(true)}><Rocket className="size-3.5" />Deploy</button>}

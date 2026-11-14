@@ -36,7 +36,7 @@ export type StepState = 'done' | 'warn' | 'fail' | 'todo';
 export interface ProjectStep { key: string; label: string; state: StepState; detail?: string }
 export interface ProjectDetail extends ProjectSummary { steps: ProjectStep[] }
 
-export interface CreateProjectInput { name: string; description?: string; owner?: string; outputs?: Outputs }
+export interface CreateProjectInput { name: string; description?: string; outputs?: Outputs }
 export type UpdateProjectInput = Partial<CreateProjectInput>;
 
 // ---------- spec ----------

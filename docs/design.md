@@ -105,7 +105,7 @@ Response types live in `packages/shared/src/index.ts`.
 | ANY | `/mcp/:slug` | Public MCP endpoint (Streamable HTTP), bearer token required, proxied to the deployed server |
 | GET | `/audit` | Audit log |
 | GET / POST | `/users` | List / create users (`users.manage`); create returns a temporary password once |
-| GET | `/users/lookup?q=` | Find enabled users for the add-member picker |
+| GET | `/users/lookup?q=` | Find enabled users for the add-member picker; needs `users.manage`, or `members.manage` on any project |
 | PATCH | `/users/:id` | Update name, role, disabled |
 | POST | `/users/:id/reset-password` | New temporary password, revokes sessions |
 | GET | `/permissions` | Permission catalogue |
