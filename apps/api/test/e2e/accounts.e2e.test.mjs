@@ -60,7 +60,9 @@ test('admin creates a user with a generated temporary password; hashes never lea
 });
 
 test('username and password rules', async () => {
-  assert.equal((await root.post('/api/users', { username: 'carol', displayName: 'Again', roleId: 'role_member' })).status, 409);
+  const dup = await root.post('/api/users', { username: 'carol', displayName: 'Again', roleId: 'role_member' });
+  assert.equal(dup.status, 409);
+  assert.equal(dup.body.message, 'Username "carol" is already taken');
   assert.equal((await root.post('/api/users', { username: 'Bad Name', displayName: 'x', roleId: 'role_member' })).status, 400);
   assert.equal((await root.post('/api/users', { username: 'shorty', displayName: 'x', roleId: 'role_member', password: 'short' })).status, 400);
   assert.equal((await root.post('/api/users', { username: 'scoped', displayName: 'x', roleId: 'role_owner' })).status, 400);
@@ -81,8 +83,17 @@ test('a user manager cannot hand out more than they hold or change their own rol
   assert.equal((await uma.patch(`/api/users/${umaId}`, { roleId: 'role_member' })).status, 403);
   assert.equal((await uma.patch(`/api/users/${umaId}`, { disabled: true })).status, 403);
   ok(await uma.post('/api/users', { username: 'mel', displayName: 'Mel', roleId: 'role_member' }));
-  // Resetting an admin's password would hand the manager the admin account.
-  assert.equal((await uma.post(`/api/users/${await userId('root')}/reset-password`)).status, 403);
+  // Acting on a user with more permissions than the manager holds: reset, disable, enable, demote are refused.
+  const rootId = await userId('root');
+  assert.equal((await uma.post(`/api/users/${rootId}/reset-password`)).status, 403);
+  const disable = await uma.patch(`/api/users/${rootId}`, { disabled: true });
+  assert.equal(disable.status, 403);
+  assert.match(disable.body.message, /permissions you do not hold/);
+  assert.equal((await uma.patch(`/api/users/${rootId}`, { roleId: 'role_member' })).status, 403);
+  const renamed = await uma.patch(`/api/users/${rootId}`, { displayName: 'Root' });
+  ok(renamed);
+  assert.equal(renamed.body.displayName, 'Root');
+  assert.equal(renamed.body.role.id, 'role_admin');
 });
 
 test('a role manager cannot add permissions they do not hold', async () => {
@@ -105,11 +116,15 @@ test('the last admin cannot be disabled', async () => {
   ok(off);
   assert.equal(off.body.disabled, true);
   assert.equal((await root.get('/api/auth/me')).status, 401);
+  // admin2 is now the last admin. Only an admin may act on an admin, and admins cannot disable or demote themselves,
+  // so the last one cannot be removed through the API (the 409 last-admin guard stays as a backstop).
+  const admin2Id = await userId('admin2');
+  assert.equal((await admin2.patch(`/api/users/${admin2Id}`, { disabled: true })).status, 403);
+  assert.equal((await admin2.patch(`/api/users/${admin2Id}`, { roleId: 'role_member' })).status, 403);
   const uma = client(s.base);
   assert.equal((await uma.login('uma', PASSWORD)).status, 201);
-  const last = await uma.patch(`/api/users/${await userId('admin2')}`, { disabled: true });
-  assert.equal(last.status, 409);
-  assert.equal((await uma.patch(`/api/users/${await userId('admin2')}`, { roleId: 'role_member' })).status, 409);
+  assert.equal((await uma.patch(`/api/users/${admin2Id}`, { disabled: true })).status, 403);
+  assert.equal((await uma.patch(`/api/users/${rootId}`, { disabled: false })).status, 403);
   ok(await admin2.patch(`/api/users/${rootId}`, { disabled: false }));
   assert.equal((await root.login('root', PASSWORD)).status, 201);
   const actions = (await s.prisma.auditLog.findMany({ where: { target: 'root' } })).map((a) => a.action);
@@ -131,6 +146,9 @@ test('system roles, roles in use and role scopes', async () => {
   const edited = await root.patch(`/api/roles/${created.body.id}`, { permissions: ['qa.run', 'testcases.manage'] });
   ok(edited);
   assert.deepEqual(edited.body.permissions, ['qa.run', 'testcases.manage']);
+  const clash = await root.patch(`/api/roles/${created.body.id}`, { name: 'Reviewer' });
+  assert.equal(clash.status, 409);
+  assert.equal(clash.body.message, 'A project role named "Reviewer" already exists');
   ok(await root.del(`/api/roles/${created.body.id}`));
   assert.equal((await root.post('/api/roles', { name: 'Wrong', scope: 'project', permissions: ['users.manage'] })).status, 400);
   assert.equal((await root.post('/api/roles', { name: 'Member', scope: 'workspace', permissions: [] })).status, 409);

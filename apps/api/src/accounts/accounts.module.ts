@@ -51,6 +51,17 @@ async function roleOfScope(prisma: PrismaService, id: string, scope: RoleScope):
   return role;
 }
 
+/** Acting on a user's role, disabled flag or password needs every permission of the user's current role. */
+function assertCanActOn(actor: readonly string[], target: User & { role: Role }) {
+  if (!canGrant(actor, target.role.permissions)) throw new ForbiddenException(`You cannot change user "${target.username}": their role has permissions you do not hold`);
+}
+
+/** Maps a unique-constraint race (Prisma P2002) to the same 409 the caller would otherwise report. */
+const conflictOnDuplicate = (message: string) => (e: unknown): never => {
+  if ((e as { code?: string }).code === 'P2002') throw new ConflictException(message);
+  throw e;
+};
+
 function assertCanGrant(actor: readonly string[], role: Pick<Role, 'name' | 'permissions'>) {
   if (!canGrant(actor, role.permissions)) throw new ForbiddenException(`You cannot grant role "${role.name}": it has permissions you do not hold`);
 }
@@ -90,11 +101,10 @@ class UsersController {
     const pw = input.password ?? temporaryPassword!;
     const problem = passwordProblem(pw, input.username);
     if (problem) throw new BadRequestException(problem);
-    if (await this.prisma.user.findUnique({ where: { username: input.username } })) throw new ConflictException(`Username "${input.username}" is already taken`);
     const user = await this.prisma.user.create({
       data: { username: input.username, displayName: input.displayName, roleId: role.id, passwordHash: await hashPassword(pw), mustChangePassword: true },
       include: { role: true },
-    });
+    }).catch(conflictOnDuplicate(`Username "${input.username}" is already taken`));
     await this.audit.log('user.create', user.username, { role: role.name });
     return { user: toUserDto(user), temporaryPassword };
   }
@@ -103,11 +113,12 @@ class UsersController {
   async update(@Param('id') id: string, @Body() body: unknown): Promise<UserDto> {
     const input = parse(z.object({ displayName, roleId: z.string(), disabled: z.boolean() }).partial().strict(), body);
     const me = currentUser()!;
-    const cur = await this.prisma.user.findUnique({ where: { id } });
+    const cur = await this.prisma.user.findUnique({ where: { id }, include: { role: true } });
     if (!cur) throw new NotFoundException('User not found');
     const roleChanged = input.roleId !== undefined && input.roleId !== cur.roleId;
     const disabledChanged = input.disabled !== undefined && input.disabled !== cur.disabled;
     if (id === me.id && (roleChanged || disabledChanged)) throw new ForbiddenException('You cannot change your own role or disable yourself');
+    if (roleChanged || disabledChanged) assertCanActOn(me.permissions, cur);
     if (roleChanged) assertCanGrant(me.permissions, await roleOfScope(this.prisma, input.roleId!, 'workspace'));
     const user = await keepingAnAdmin(this.prisma, (tx) => tx.user.update({ where: { id }, data: input, include: { role: true } }));
     if (input.disabled) await this.sessions.revokeAllForUser(id);
@@ -122,8 +133,8 @@ class UsersController {
     const input = parse(z.object({ password: password.optional() }).strict(), body);
     const target = await this.prisma.user.findUnique({ where: { id }, include: { role: true } });
     if (!target) throw new NotFoundException('User not found');
-    // Knowing the new password means owning the account, so it needs every permission the account has.
-    if (!canGrant(currentUser()!.permissions, target.role.permissions)) throw new ForbiddenException('You cannot reset the password of a user with permissions you do not hold');
+    // Knowing the new password means owning the account.
+    assertCanActOn(currentUser()!.permissions, target);
     const temporaryPassword = input.password === undefined ? generatePassword() : null;
     const pw = input.password ?? temporaryPassword!;
     const problem = passwordProblem(pw, target.username);
@@ -157,11 +168,6 @@ class RolesController {
     if (scope === 'workspace' && !canGrant(me.permissions, permissions)) throw new ForbiddenException('A role may only include permissions you hold');
   }
 
-  private async assertDuplicateFree(scope: string, name: string, exceptId?: string) {
-    const other = await this.prisma.role.findUnique({ where: { scope_name: { scope, name } } });
-    if (other && other.id !== exceptId) throw new ConflictException(`A ${scope} role named "${name}" already exists`);
-  }
-
   /** System roles are fixed (409); the actor may not edit or delete a role they are assigned to (403). */
   private async editable(me: RequestUser, id: string): Promise<Role> {
     const role = await this.prisma.role.findUnique({ where: { id } });
@@ -177,8 +183,8 @@ class RolesController {
   async create(@Body() body: unknown): Promise<RoleDto> {
     const input = parse(z.object({ ...roleFields, description: roleFields.description.default(''), scope: z.enum(['workspace', 'project']) }).strict(), body);
     this.checkPermissions(currentUser()!, input.scope, input.permissions);
-    await this.assertDuplicateFree(input.scope, input.name);
-    const role = await this.prisma.role.create({ data: input, include: roleInclude });
+    const role = await this.prisma.role.create({ data: input, include: roleInclude })
+      .catch(conflictOnDuplicate(`A ${input.scope} role named "${input.name}" already exists`));
     await this.audit.log('role.create', role.name, { scope: role.scope, permissions: role.permissions });
     return toRoleDto(role);
   }
@@ -189,8 +195,8 @@ class RolesController {
     const me = currentUser()!;
     const cur = await this.editable(me, id);
     this.checkPermissions(me, cur.scope as RoleScope, input.permissions ?? cur.permissions);
-    if (input.name) await this.assertDuplicateFree(cur.scope, input.name, id);
-    const role = await keepingAnAdmin(this.prisma, (tx) => tx.role.update({ where: { id }, data: input, include: roleInclude }));
+    const role = await keepingAnAdmin(this.prisma, (tx) => tx.role.update({ where: { id }, data: input, include: roleInclude }))
+      .catch(conflictOnDuplicate(`A ${cur.scope} role named "${input.name}" already exists`));
     await this.audit.log('role.update', role.name, { fields: Object.keys(input), permissions: role.permissions });
     return toRoleDto(role);
   }
